@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local configuration and runtime files
+.env
+.env.*
+!.env.example
+*.log
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

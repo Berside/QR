@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Управление</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Учёт</h1>
+        <div class="qr-buttons">
+            <button id="allQrBtn">Все QR</button>
+            <button id="scan">Сканирование QR</button>
+        </div>
+        <div class="add-item-form">
+            <h2>Добавить новый предмет</h2>
+            <input type="text" id="itemProduct" class="form-input" placeholder="Изделие">
+            <input type="text" id="itemPlacement" class="form-input" placeholder="Место укладки">
+            <!-- <input type="text" id="itemDocument" class="form-input" placeholder="Вложенный документ"> -->
+            <input type="number" id="itemCurrentCount" class="form-input" placeholder="Текущее количество">
+            <input type="number" id="itemAvailableCount" class="form-input" placeholder="Доступное количество">
+            <input type="text" id="itemAnalogue" class="form-input" placeholder="Аналог/заменитель">
+            <div class="image-upload">
+                <input type="file" id="itemImage" accept=".png,.jpg,.jpeg">
+                <div class="image-upload__hint">Перетащите изображения или нажмите для выбора</div>
+            </div>
+
+            <!-- <div class="document-upload">
+                <input type="file" id="itemDocument" accept=".pdf,.doc,.docx,.xls,.xlsx">
+                <div class="document-upload__hint">Перетащите документ или нажмите для выбора</div>
+            </div> -->
+            
+            <button id="addItemBtn">Добавить</button>
+            <p id="addMessage"></p>
+        </div>
+
+        <div class="items-list">
+            <div id="tableChangedNotice" class="table-changed-notice">
+                Таблица была изменена
+            </div>
+
+            <h2>Текущие предметы</h2>
+            <div class="excel-form">
+                <input type="file" id="excelFile" accept=".xlsx,.xls">
+                <button id="selectExcelBtn">Загрузить</button>
+                <button id="downloadExcelBtn">Скачать измененный Excel</button>
+                <p id="excelMessage"></p>
+            </div>
+
+            {% if error %}
+                <p class="upload-error">{{ error }}</p>
+            {% endif %}
+
+            <table border="1">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Изделие</th>
+                        <th>Место укладки</th>
+                        <th>Текущее количество</th>
+                        <th>Доступное количество</th>
+                        <th>Изображение</th>
+                        <th>Вложенный документ</th>
+                        <th>Аналог/заменитель</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                
+                <tbody id="itemsTableBody">
+                    {%if items%}
+                        {% for item in items %}
+                        <tr data-id="{{ item.id }}"
+                            data-product="{{ item.product }}"
+                            data-placement="{{ item.placement_location }}"
+                            data-current="{{ item.current_count }}"
+                            data-available="{{ item.available_count }}"
+                            data-analogue="{{ item.analogue }}">
+                            <td data-field="id">{{ item.id }}</td>
+                            <td data-field="product">{{ item.product }}</td>
+                            <td data-field="placement">{{ item.placement_location }}</td>
+                            <td data-field="current">{{ item.current_count }}</td>
+                            <td data-field="available">{{ item.available_count }}</td>
+                            <td class="image-cell">
+                                <span class="image-name">
+                                    {% if item.image %}Картинка{% else %}—{% endif %}
+                                </span>
+                                {% if item.image %}
+                                <div class="image-preview">
+                                    <img src="{{ item.image }}" alt="Предпросмотр">
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.document }}</td>
+                            <td data-field="analogue">{{ item.analogue }}</td>
+                            <!-- <td><button class="printOneBtn" data-id="{{ item.id }}">Печать QR</button></td> -->
+                            <td class="action-buttons">
+                                <button class="printOneBtn" data-id="{{ item.id }}">Печать QR</button>
+                                <button class="editBtn" data-id="{{ item.id }}">Редактировать</button>
+                                <button class="deleteBtn" data-id="{{ item.id }}">Удалить</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {%endif%}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Модальное окно для редактирования -->
+        <div id="editModal" class="modal">
+            <div class="modal-content">
+                <span class="modal-close">&times;</span>
+                <h2>Редактировать предмет</h2>
+                <form class="modal-form">
+                    <input type="hidden" id="editItemId">
+                    <input type="text" id="editProduct" placeholder="Изделие" required>
+                    <input type="text" id="editPlacement" placeholder="Место укладки">
+                    <input type="number" id="editCurrentCount" placeholder="Текущее количество">
+                    <input type="number" id="editAvailableCount" placeholder="Доступное количество">
+                    <input type="text" id="editAnalogue" placeholder="Аналог/заменитель">
+                    <div class="modal-buttons">
+                        <button type="button" class="save-btn" id="saveEditBtn">Сохранить</button>
+                        <button type="button" class="cancel-btn" id="cancelEditBtn">Отмена</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+
+            document.querySelector('#selectExcelBtn').addEventListener('click', function() {    
+                const input = document.querySelector('#excelFile');
+                if (!input.files.length) {
+                    alert('Выберите Excel файл');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('excel_file', input.files[0]);
+
+                fetch('/api/select_excel', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.querySelector('#excelMessage').textContent =
+                            'Файл загружен: ' + data.filename;
+                        document.querySelector('#excelMessage').style.color = 'green';
+                        window.location.reload();
+                    } else {
+                        document.querySelector('#excelMessage').textContent = data.error || 'Ошибка загрузки';
+                        document.querySelector('#excelMessage').style.color = 'red';
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.querySelector('#excelMessage').textContent = 'Ошибка загрузки';
+                    document.querySelector('#excelMessage').style.color = 'red';
+                });
+            });
+            // Обработчик добавления предмета
+            const fileInput = document.querySelector('#excelFile');
+            
+            const imageInput = document.querySelector('#itemImage');
+            const imageHint = document.querySelector('.image-upload__hint');
+
+            // const documentInput = document.querySelector('#itemDocument');
+            // const documentHint = document.querySelector('.document-upload__hint');
+            const imageHintDefault = imageHint.textContent;
+            // const documentHintDefault = documentHint.textContent;
+
+            imageInput.addEventListener('change', () => {
+                if (imageInput.files && imageInput.files.length) {
+                    const count = imageInput.files.length;
+
+                    const allowed = ['image/png', 'image/jpeg', 'image/jpg'];
+                    const isValid = [...imageInput.files].every(f => allowed.includes(f.type));
+
+                    if (isValid) {
+                        imageHint.textContent = count === 1
+                            ? `Выбрано: ${imageInput.files[0].name}`
+                            : `Выбрано: ${count} файла(ов)`;
+                        }
+                        else{
+                            alert('Поддерживаются только изображения в формате PNG, JPG или JPEG');
+                        }
+                    } 
+                else {
+                    imageHint.textContent = imageHintDefault;
+                }
+            });
+
+            // documentInput.addEventListener('change', () => {
+            //     if (documentInput.files && documentInput.files.length) {
+            //         const count = documentInput.files.length;
+
+            //         const allowed = [
+            //             'application/pdf',
+            //             'application/msword',
+            //             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            //             'application/vnd.ms-excel',
+            //             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            //         ];
+            //         const isValid = [...documentInput.files].every(f => allowed.includes(f.type));
+
+            //         if (isValid) {
+            //             documentHint.textContent = count === 1
+            //                 ? `Выбрано: ${documentInput.files[0].name}`
+            //                 : `Выбрано: ${count} файла(ов)`;
+            //             }
+            //             else{
+            //                 alert('Поддерживаются только документы в формате PDF, DOC, DOCX, XLS, XLSX');
+            //             }
+            //         } 
+            //     else {
+            //         documentHint.textContent = documentHintDefault;
+            //     }
+            // });
+
+            document.querySelector('#addItemBtn').addEventListener('click', function() {
+                const product = document.querySelector('#itemProduct').value;
+                const placement = document.querySelector('#itemPlacement').value;
+                const current_count = document.querySelector('#itemCurrentCount').value;
+                const available_count = document.querySelector('#itemAvailableCount').value;
+                const imageInput = document.querySelector('#itemImage');
+                // const documentInput = document.querySelector('#itemDocument');
+                const analogue = document.querySelector('#itemAnalogue').value;
+
+                if (!product) {
+                    alert('Введите название предмета!');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('product', product);
+                formData.append('placement_location', placement);
+                formData.append('current_count', current_count);
+                formData.append('available_count', available_count);
+                formData.append('analogue', analogue);
+
+                if (imageInput.files && imageInput.files[0]) {
+                    formData.append('image', imageInput.files[0]);
+                }
+
+                // if (documentInput.files && documentInput.files[0]) {
+                //     formData.append('document', documentInput.files[0]);
+                // }
+
+                fetch('/api/add_item', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.querySelector('#addMessage').textContent = 'Предмет добавлен! ID: ' + data.id;
+                        document.querySelector('#addMessage').style.color = 'green';
+                        document.querySelector('#itemProduct').value = '';
+                        document.querySelector('#itemPlacement').value = '';
+                        document.querySelector('#itemCurrentCount').value = '';
+                        document.querySelector('#itemAvailableCount').value = '';
+                        document.querySelector('#itemImage').value = '';
+                        document.querySelector('.image-upload__hint').textContent = imageHintDefault;
+                        // document.querySelector('.document-upload__hint').textContent = documentHintDefault;
+                        document.querySelector('#itemAnalogue').value = '';
+
+                        window.location.reload();
+                    }
+                    if (data.error) {
+                        document.querySelector('#addMessage').textContent = data.error;
+                        document.querySelector('#addMessage').style.color = 'red';
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка:', error);
+                    document.querySelector('#addMessage').textContent = 'Ошибка при добавлении предмета.';
+                    document.querySelector('#addMessage').style.color = 'red';
+                });
+            });
+
+            document.querySelectorAll('.printOneBtn').forEach(button => {
+                button.addEventListener('click', async function() {
+                    const itemId = this.getAttribute('data-id');
+                    // window.location.href = `/api/print_item/${itemId}`;
+                    try {
+                        const response = await fetch(`/api/print_item/${itemId}`);
+                        const data = await response.json();
+                        if (response.ok) {
+                            alert('✅ Печать выполнена успешно!');
+                        } else {
+                            alert('❌ Ошибка: ' + (data.error || data.details || 'Неизвестная ошибка'));
+                        }
+                    } catch (err) {
+                        alert('❌ Ошибка соединения: ' + err.message);
+                    }
+                });
+            });
+
+            document.querySelector('#allQrBtn').addEventListener('click', function(){
+                window.location.href = `/print_labels`;
+            })
+
+            document.querySelector('#scan').addEventListener('click', function(){
+                window.location.href = `/scan`;
+            })
+        });
+
+        const inputs = document.querySelectorAll('.form-input');
+        inputs.forEach(input => {
+            input.addEventListener('keydown', function(event){
+                if (event.key === 'Enter'){
+                    event.preventDefault();
+                    document.querySelector('#addItemBtn').click();
+                }
+            })
+        })
+
+        document.querySelector('#downloadExcelBtn').addEventListener('click', function(){
+            window.location.href = `/api/download_excel`;
+        });
+
+
+        let isTableChanged = false;
+
+        function markTableChanged() {
+            isTableChanged = true;
+            document.querySelector('#tableChangedNotice').classList.add('show');
+        }
+
+        // function resetTableChanged() {
+        //     isTableChanged = false;
+        //     document.querySelector('#tableChangedNotice').classList.remove('show');
+        // }
+
+        // ===== МОДАЛЬНОЕ ОКНО ДЛЯ РЕДАКТИРОВАНИЯ =====
+        const editModal = document.querySelector('#editModal');
+        const modalClose = document.querySelector('.modal-close');
+        const cancelEditBtn = document.querySelector('#cancelEditBtn');
+        const saveEditBtn = document.querySelector('#saveEditBtn');
+
+        // Открыть модальное окно
+        document.querySelectorAll('.editBtn').forEach(button => {
+            button.addEventListener('click', function() {
+                const itemId = this.getAttribute('data-id');
+                const row = this.closest('tr');
+        
+                // Получаем данные из таблицы
+                document.querySelector('#editItemId').value = row.dataset.id;
+                document.querySelector('#editProduct').value = row.dataset.product;
+                document.querySelector('#editPlacement').value = row.dataset.placement;
+                document.querySelector('#editCurrentCount').value = row.dataset.current;
+                document.querySelector('#editAvailableCount').value = row.dataset.available;
+                document.querySelector('#editAnalogue').value = row.dataset.analogue;
+        
+                editModal.classList.add('show');
+            });
+        });
+
+        // Закрыть модальное окно
+        modalClose.addEventListener('click', function() {
+            editModal.classList.remove('show');
+        });
+
+        cancelEditBtn.addEventListener('click', function() {
+            editModal.classList.remove('show');
+        });
+
+        window.addEventListener('click', function(event) {
+            if (event.target === editModal) {
+                editModal.classList.remove('show');
+            }
+        });
+
+        // Сохранить изменения
+        saveEditBtn.addEventListener('click', async function() {
+            const itemId = document.querySelector('#editItemId').value;
+            const product = document.querySelector('#editProduct').value;
+            const placement_location = document.querySelector('#editPlacement').value;
+            const current_count = document.querySelector('#editCurrentCount').value;
+            const available_count = document.querySelector('#editAvailableCount').value;
+            const analogue = document.querySelector('#editAnalogue').value;
+    
+            if (!product) {
+                alert('Название предмета обязательно!');
+                return;
+            }
+    
+            try {
+                const response = await fetch(`/api/edit_item/${itemId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        product,
+                        placement_location,
+                        current_count,
+                        available_count,
+                        analogue
+                    })
+                });
+        
+                const data = await response.json();
+        
+                if (response.ok) {
+                    markTableChanged();
+                    editModal.classList.remove('show');
+                    alert('Предмет отредактирован!');
+                    const row = document.querySelector(`tr[data-id="${itemId}"]`);
+                    row.querySelector('[data-field="product"]').textContent = product;
+                    row.querySelector('[data-field="placement"]').textContent = placement_location;
+                    row.querySelector('[data-field="current"]').textContent = current_count;
+                    row.querySelector('[data-field="available"]').textContent = available_count;
+                    row.querySelector('[data-field="analogue"]').textContent = analogue;
+                    // window.location.reload();
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('Ошибка при редактировании');
+            }
+        });
+
+        // ===== УДАЛЕНИЕ =====
+        document.querySelectorAll('.deleteBtn').forEach(button => {
+            button.addEventListener('click', async function() {
+                if (!confirm('Вы уверены, что хотите удалить этот предмет?')) {
+                    return;
+                }
+        
+                const itemId = this.getAttribute('data-id');
+        
+                try {
+                    const response = await fetch(`/api/delete_item/${itemId}`, {
+                        method: 'DELETE'
+                    });
+            
+                    const data = await response.json();
+            
+                    if (response.ok) {
+                        markTableChanged();
+                        alert('Предмет удален!');
+                        window.location.reload();
+                    } else {
+                        alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                    }
+                } catch (error) {
+                    console.error('Ошибка:', error);
+                    alert('Ошибка при удалении');
+                }
+            });
+        });
+
+        // Показать уведомление об изменениях при перезагрузке страницы после изменений
+        // window.addEventListener('load', function() {
+        //     // Можно проверить localStorage если нужно сохранять состояние
+        // });
+    </script>
+</body>
+</html>
