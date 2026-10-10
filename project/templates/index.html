@@ -14,12 +14,12 @@
         </div>
         <div class="add-item-form">
             <h2>Добавить новый предмет</h2>
-            <input type="text" id="itemProduct" class="form-input" placeholder="Изделие">
-            <input type="text" id="itemPlacement" class="form-input" placeholder="Место укладки">
-            <!-- <input type="text" id="itemDocument" class="form-input" placeholder="Вложенный документ"> -->
-            <input type="number" id="itemCurrentCount" class="form-input" placeholder="Текущее количество">
-            <input type="number" id="itemAvailableCount" class="form-input" placeholder="Доступное количество">
-            <input type="text" id="itemAnalogue" class="form-input" placeholder="Аналог/заменитель">
+            {% if columns %}
+            {% for column in columns if column not in ['id', 'image', 'document'] %}
+            <label>{{ column }}
+                <input type="text" class="form-input item-column" data-column="{{ column }}" placeholder="{{ column }}">
+            </label>
+            {% endfor %}
             <div class="image-upload">
                 <input type="file" id="itemImage" accept=".png,.jpg,.jpeg">
                 <div class="image-upload__hint">Перетащите изображения или нажмите для выбора</div>
@@ -31,6 +31,9 @@
             </div> -->
             
             <button id="addItemBtn">Добавить</button>
+            {% else %}
+            <p class="excel-empty-state">Сначала загрузите Excel.</p>
+            {% endif %}
             <p id="addMessage"></p>
         </div>
 
@@ -50,17 +53,11 @@
                 <p class="upload-error">{{ error }}</p>
             {% endif %}
 
+            {% if columns %}
             <table border="1">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Изделие</th>
-                        <th>Место укладки</th>
-                        <th>Текущее количество</th>
-                        <th>Доступное количество</th>
-                        <th>Изображение</th>
-                        <th>Вложенный документ</th>
-                        <th>Аналог/заменитель</th>
+                        {% for column in columns %}<th>{{ column }}</th>{% endfor %}
                         <th>Действия</th>
                     </tr>
                 </thead>
@@ -68,29 +65,15 @@
                 <tbody id="itemsTableBody">
                     {%if items%}
                         {% for item in items %}
-                        <tr data-id="{{ item.id }}"
-                            data-product="{{ item.product }}"
-                            data-placement="{{ item.placement_location }}"
-                            data-current="{{ item.current_count }}"
-                            data-available="{{ item.available_count }}"
-                            data-analogue="{{ item.analogue }}">
-                            <td data-field="id">{{ item.id }}</td>
-                            <td data-field="product">{{ item.product }}</td>
-                            <td data-field="placement">{{ item.placement_location }}</td>
-                            <td data-field="current">{{ item.current_count }}</td>
-                            <td data-field="available">{{ item.available_count }}</td>
-                            <td class="image-cell">
-                                <span class="image-name">
-                                    {% if item.image %}Картинка{% else %}—{% endif %}
-                                </span>
-                                {% if item.image %}
-                                <div class="image-preview">
-                                    <img src="{{ item.image }}" alt="Предпросмотр">
-                                </div>
-                                {% endif %}
+                        <tr data-id="{{ item.get('id', '') }}">
+                            {% for column in columns %}
+                            <td data-column="{{ column }}" {% if column == 'image' %}class="image-cell"{% endif %}>
+                                {% if column == 'image' and item.get(column) %}
+                                    <span class="image-name">Картинка</span>
+                                    <div class="image-preview"><img src="{{ item.get(column) }}" alt="Предпросмотр"></div>
+                                {% else %}{{ item.get(column, '') }}{% endif %}
                             </td>
-                            <td>{{ item.document }}</td>
-                            <td data-field="analogue">{{ item.analogue }}</td>
+                            {% endfor %}
                             <!-- <td><button class="printOneBtn" data-id="{{ item.id }}">Печать QR</button></td> -->
                             <td class="action-buttons">
                                 <button class="printOneBtn" data-id="{{ item.id }}">Печать QR</button>
@@ -102,6 +85,9 @@
                     {%endif%}
                 </tbody>
             </table>
+            {% else %}
+            <p class="excel-empty-state">Загрузите Excel-файл, чтобы увидеть его здесь.</p>
+            {% endif %}
         </div>
 
         <!-- Модальное окно для редактирования -->
@@ -111,11 +97,7 @@
                 <h2>Редактировать предмет</h2>
                 <form class="modal-form">
                     <input type="hidden" id="editItemId">
-                    <input type="text" id="editProduct" placeholder="Изделие" required>
-                    <input type="text" id="editPlacement" placeholder="Место укладки">
-                    <input type="number" id="editCurrentCount" placeholder="Текущее количество">
-                    <input type="number" id="editAvailableCount" placeholder="Доступное количество">
-                    <input type="text" id="editAnalogue" placeholder="Аналог/заменитель">
+                    <div id="editFields"></div>
                     <div class="modal-buttons">
                         <button type="button" class="save-btn" id="saveEditBtn">Сохранить</button>
                         <button type="button" class="cancel-btn" id="cancelEditBtn">Отмена</button>
@@ -166,10 +148,10 @@
 
             // const documentInput = document.querySelector('#itemDocument');
             // const documentHint = document.querySelector('.document-upload__hint');
-            const imageHintDefault = imageHint.textContent;
+            const imageHintDefault = imageHint ? imageHint.textContent : '';
             // const documentHintDefault = documentHint.textContent;
 
-            imageInput.addEventListener('change', () => {
+            imageInput?.addEventListener('change', () => {
                 if (imageInput.files && imageInput.files.length) {
                     const count = imageInput.files.length;
 
@@ -217,28 +199,14 @@
             //     }
             // });
 
-            document.querySelector('#addItemBtn').addEventListener('click', function() {
-                const product = document.querySelector('#itemProduct').value;
-                const placement = document.querySelector('#itemPlacement').value;
-                const current_count = document.querySelector('#itemCurrentCount').value;
-                const available_count = document.querySelector('#itemAvailableCount').value;
+            document.querySelector('#addItemBtn')?.addEventListener('click', function() {
                 const imageInput = document.querySelector('#itemImage');
-                // const documentInput = document.querySelector('#itemDocument');
-                const analogue = document.querySelector('#itemAnalogue').value;
-
-                if (!product) {
-                    alert('Введите название предмета!');
-                    return;
-                }
-                
                 const formData = new FormData();
-                formData.append('product', product);
-                formData.append('placement_location', placement);
-                formData.append('current_count', current_count);
-                formData.append('available_count', available_count);
-                formData.append('analogue', analogue);
+                document.querySelectorAll('.item-column').forEach(input => {
+                    formData.append(input.dataset.column, input.value);
+                });
 
-                if (imageInput.files && imageInput.files[0]) {
+                if (imageInput?.files && imageInput.files[0]) {
                     formData.append('image', imageInput.files[0]);
                 }
 
@@ -255,14 +223,9 @@
                     if (data.status === 'success') {
                         document.querySelector('#addMessage').textContent = 'Предмет добавлен! ID: ' + data.id;
                         document.querySelector('#addMessage').style.color = 'green';
-                        document.querySelector('#itemProduct').value = '';
-                        document.querySelector('#itemPlacement').value = '';
-                        document.querySelector('#itemCurrentCount').value = '';
-                        document.querySelector('#itemAvailableCount').value = '';
-                        document.querySelector('#itemImage').value = '';
-                        document.querySelector('.image-upload__hint').textContent = imageHintDefault;
-                        // document.querySelector('.document-upload__hint').textContent = documentHintDefault;
-                        document.querySelector('#itemAnalogue').value = '';
+                        document.querySelectorAll('.item-column').forEach(input => input.value = '');
+                        if (imageInput) imageInput.value = '';
+                        if (imageHint) imageHint.textContent = imageHintDefault;
 
                         window.location.reload();
                     }
@@ -345,15 +308,21 @@
             button.addEventListener('click', function() {
                 const itemId = this.getAttribute('data-id');
                 const row = this.closest('tr');
-        
-                // Получаем данные из таблицы
                 document.querySelector('#editItemId').value = row.dataset.id;
-                document.querySelector('#editProduct').value = row.dataset.product;
-                document.querySelector('#editPlacement').value = row.dataset.placement;
-                document.querySelector('#editCurrentCount').value = row.dataset.current;
-                document.querySelector('#editAvailableCount').value = row.dataset.available;
-                document.querySelector('#editAnalogue').value = row.dataset.analogue;
-        
+                const fields = document.querySelector('#editFields');
+                fields.replaceChildren();
+                row.querySelectorAll('[data-column]').forEach(cell => {
+                    const column = cell.dataset.column;
+                    if (['id', 'image', 'document'].includes(column)) return;
+                    const label = document.createElement('label');
+                    label.textContent = column;
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.dataset.column = column;
+                    input.value = cell.textContent.trim();
+                    label.appendChild(input);
+                    fields.appendChild(label);
+                });
                 editModal.classList.add('show');
             });
         });
@@ -376,30 +345,17 @@
         // Сохранить изменения
         saveEditBtn.addEventListener('click', async function() {
             const itemId = document.querySelector('#editItemId').value;
-            const product = document.querySelector('#editProduct').value;
-            const placement_location = document.querySelector('#editPlacement').value;
-            const current_count = document.querySelector('#editCurrentCount').value;
-            const available_count = document.querySelector('#editAvailableCount').value;
-            const analogue = document.querySelector('#editAnalogue').value;
-    
-            if (!product) {
-                alert('Название предмета обязательно!');
-                return;
-            }
-    
+            const values = {};
+            document.querySelectorAll('#editFields [data-column]').forEach(input => {
+                values[input.dataset.column] = input.value;
+            });
             try {
                 const response = await fetch(`/api/edit_item/${itemId}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        product,
-                        placement_location,
-                        current_count,
-                        available_count,
-                        analogue
-                    })
+                    body: JSON.stringify({values})
                 });
         
                 const data = await response.json();
@@ -409,11 +365,10 @@
                     editModal.classList.remove('show');
                     alert('Предмет отредактирован!');
                     const row = document.querySelector(`tr[data-id="${itemId}"]`);
-                    row.querySelector('[data-field="product"]').textContent = product;
-                    row.querySelector('[data-field="placement"]').textContent = placement_location;
-                    row.querySelector('[data-field="current"]').textContent = current_count;
-                    row.querySelector('[data-field="available"]').textContent = available_count;
-                    row.querySelector('[data-field="analogue"]').textContent = analogue;
+                    Object.entries(values).forEach(([column, value]) => {
+                        const cell = row.querySelector(`[data-column="${CSS.escape(column)}"]`);
+                        if (cell) cell.textContent = value;
+                    });
                     // window.location.reload();
                 } else {
                     alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));

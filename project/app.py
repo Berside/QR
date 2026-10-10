@@ -27,10 +27,9 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['EXCEL_FILE'] = None
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-EXCEL_COLUMNS = [
-    'id', 'product', 'placement_location', 'current_count',
-    'available_count', 'image', 'document', 'analogue',
-]
+# Какие столбцы печатать на этикетке (точные заголовки из Excel).
+# Порядок в списке задаёт порядок строк. Добавляйте/удаляйте названия здесь.
+LABEL_COLUMNS = ['product', 'ШИБФ', 'available_count']
 
 packing_list = []
 printer_lock = Lock()
@@ -45,19 +44,26 @@ def load_items():
     if not excel_path or not os.path.exists(excel_path):
         return []
     df = pd.read_excel(excel_path, dtype={'id': str}, keep_default_na=False)
-    if 'id' not in df.columns:
-        return []
-    df['id'] = df['id'].str.strip()
+    if 'id' in df.columns:
+        df['id'] = df['id'].astype(str).str.strip()
     return df.to_dict(orient='records')
+
+def load_columns():
+    """Возвращает заголовки выбранного Excel в исходном порядке."""
+    excel_path = app.config.get('EXCEL_FILE')
+    if not excel_path or not os.path.exists(excel_path):
+        return []
+    return list(pd.read_excel(excel_path, nrows=0).columns)
 
 def save_items(items):
     """Сохраняет данные в Excel."""
     excel_path = app.config.get('EXCEL_FILE')
     if not excel_path:
         raise RuntimeError('Excel файл не выбран')
-    # Keep the headers even when the last table row is deleted, while retaining
-    # any extra columns present in a non-empty imported workbook.
-    df = pd.DataFrame(items) if items else pd.DataFrame(columns=EXCEL_COLUMNS)
+    # Take headers from the selected workbook so extra/user-defined columns
+    # survive edits and deleting the last row.
+    columns = load_columns()
+    df = pd.DataFrame(items, columns=columns)
     df.to_excel(excel_path, index=False)
 
 
@@ -73,7 +79,7 @@ def generate_qr_image(data):
     # img = qr.make_image(fill_color="black", back_color="white")
     return qr
 
-def generate_qr_image_for_print(data, item):
+def generate_qr_image_for_print(data, item, columns=None):
 
     # =========================================================
     # НАСТРОЙКИ
@@ -544,26 +550,8 @@ def generate_qr_image_for_print(data, item):
     # ДАННЫЕ
     # =========================================================
 
-    product = str(
-        item.get(
-            "product",
-            ""
-        )
-    )
-
-    item_id = str(
-        item.get(
-            "id",
-            ""
-        )
-    )
-
-    available_count = str(
-        item.get(
-            "available_count",
-            "0"
-        )
-    )
+    available_columns = columns if columns is not None else item.keys()
+    label_columns = [column for column in LABEL_COLUMNS if column in available_columns]
 
     # =========================================================
     # ФУНКЦИЯ ПЕРЕНОСА ПО PIXELS
@@ -674,88 +662,18 @@ def generate_qr_image_for_print(data, item):
     def build_lines(font):
 
         lines = []
+        for column in label_columns:
+            value = str(item.get(column, '')).strip()
+            if not value:
+                continue
 
-        # -----------------------------------------------------
-        # Название
-        # -----------------------------------------------------
-
-        name_label = "Название:"
-
-        name_lines = wrap_text_by_pixels(
-            product,
-            font,
-            text_width
-        )
-
-        # Первая строка:
-        #
-        # Название: XXXXX
-        #
-
-        label_bbox = draw.textbbox(
-            (0, 0),
-            name_label,
-            font=font
-        )
-
-        label_width = (
-            label_bbox[2]
-            - label_bbox[0]
-        )
-
-        value_width = (
-            text_width
-            - label_width
-            - field_gap
-        )
-
-        name_lines = wrap_text_by_pixels(
-            product,
-            font,
-            max(
-                1,
-                value_width
-            )
-        )
-
-        lines.append(
-            (
-                name_label,
-                name_lines[0]
-            )
-        )
-
-        # Продолжение названия
-        for line in name_lines[1:]:
-
-            lines.append(
-                (
-                    "",
-                    line
-                )
-            )
-
-        # -----------------------------------------------------
-        # ШИБ
-        # -----------------------------------------------------
-
-        lines.append(
-            (
-                "Шиб:",
-                item_id
-            )
-        )
-
-        # -----------------------------------------------------
-        # Количество
-        # -----------------------------------------------------
-
-        lines.append(
-            (
-                "Количество:",
-                available_count
-            )
-        )
+            label = f"{column}:"
+            label_bbox = draw.textbbox((0, 0), label, font=font)
+            label_width = label_bbox[2] - label_bbox[0]
+            value_width = max(1, text_width - label_width - field_gap)
+            value_lines = wrap_text_by_pixels(value, font, value_width)
+            lines.append((label, value_lines[0]))
+            lines.extend(("", line) for line in value_lines[1:])
 
         return lines
 
@@ -962,7 +880,8 @@ def generate_qr_image_for_page(data):
 def index():
     """Главная страница со списком предметов."""
     items = load_items()
-    return render_template('index.html', items=items)
+    columns = load_columns()
+    return render_template('index.html', items=items, columns=columns)
 
 @app.route('/scan')
 def scan():
@@ -972,12 +891,14 @@ def scan():
 @app.route('/print_labels')
 def print_labels():
     items = load_items()
+    columns = load_columns()
+    label_columns = [column for column in LABEL_COLUMNS if column in columns]
     # Для каждого предмета генерируем QR-код и превращаем в base64
     for item in items:
         qr_buffer = generate_qr_image_for_page(item['id'])  
         qr_base64 = base64.b64encode(qr_buffer.getvalue()).decode('utf-8')
         item['qr_base64'] = f"data:image/png;base64,{qr_base64}"
-    return render_template('print.html', items=items)
+    return render_template('print.html', items=items, label_columns=label_columns)
 
 
 @app.route('/api/select_excel', methods=['POST'])
@@ -1002,11 +923,12 @@ def select_excel():
 def add_item():
     """Добавляет новый предмет и возвращает его ID."""
     data = request.form
-    product = data.get('product', '')
-    placement_location = data.get('placement_location', '')
-    current_count = data.get('current_count', 0)
-    available_count = data.get('available_count', 0)
-    analogue = data.get('analogue', '')
+    excel_path = app.config.get('EXCEL_FILE')
+    if not excel_path or not os.path.exists(excel_path):
+        return jsonify({'error': 'Сначала загрузите Excel файл'}), 400
+    columns = load_columns()
+    if not any(data.get(column, '').strip() for column in columns if column != 'id'):
+        return jsonify({'error': 'Заполните хотя бы одно поле'}), 400
     # document = data.get('document', '')
     image_file = request.files.get('image')
     image_url = ''
@@ -1018,24 +940,13 @@ def add_item():
         image_file.save(save_path)
         image_url = f"/uploads/{unique_name}"
 
-    if not product:
-        return jsonify({'error': 'Название предмета обязательно'}), 400
-
-    excel_path = app.config.get('EXCEL_FILE')
-    if not excel_path or not os.path.exists(excel_path):
-        return jsonify({'error': 'Сначала загрузите Excel файл'}), 400
-    
     items = load_items()
     new_id = str(uuid.uuid4())[:8]  # короткий уникальный ID
-    new_item = {
-        'id': new_id,
-        'product': data.get('product', ''),
-        'placement_location': data.get('placement_location', ''),
-        'image': image_url,
-        # 'document': data.get('document', ''),
-        'current_count': data.get('current_count', 0),
-        'available_count': data.get('available_count', 0),
-        'analogue': data.get('analogue', '')}
+    new_item = {column: data.get(column, '') for column in columns}
+    if 'id' in columns:
+        new_item['id'] = new_id
+    if 'image' in columns:
+        new_item['image'] = image_url
         
     items.append(new_item)
     
@@ -1180,7 +1091,7 @@ def print_item(item_id):
     if not printer_lock.acquire(blocking=False):
         return jsonify({'error': 'Принтер занят. Дождитесь завершения печати.'}), 409
     try:
-        qr_buffer = generate_qr_image_for_print(item['id'], item)
+        qr_buffer = generate_qr_image_for_print(item['id'], item, load_columns())
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], f'qr_{uuid.uuid4().hex}.png')
         try:
             with open(filepath, 'wb') as f:
@@ -1263,29 +1174,14 @@ def delete_item(item_id):
 def edit_items(item_id):
     data = request.json
     items = load_items()
-
-    # item_found = False
-    # for item in items:
-    #     if item['id'] == item_id:
-    #         item['product'] = data.get('product', item.get('product', ''))
-    #         item['placement_location'] = data.get('placement_location', item.get('placement_location', ''))
-    #         item['current_count'] = data.get('current_count', item.get('current_count', 0))
-    #         item['available_count'] = data.get('available_count', item.get('available_count', 0))
-    #         item['analogue'] = data.get('analogue', item.get('analogue', ''))
-    #         item_found = True
-    #         break
-    # if not item_found:
-    #     return jsonify({'error': 'Предмет не найден'}), 404
-
     item = next((i for i in items if i['id'] == item_id), None)
-    if item:
-        item['product'] = data.get('product', item.get('product', ''))
-        item['placement_location'] = data.get('placement_location', item.get('placement_location', ''))
-        item['current_count'] = data.get('current_count', item.get('current_count', 0))
-        item['available_count'] = data.get('available_count', item.get('available_count', 0))
-        item['analogue'] = data.get('analogue', item.get('analogue', ''))
-    else:
+    if not item:
         return jsonify({'error': 'Предмет не найден'}), 404
+
+    values = data.get('values', data)
+    for column in load_columns():
+        if column != 'id' and column in values:
+            item[column] = values[column]
 
     try:
         save_items(items)

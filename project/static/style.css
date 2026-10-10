@@ -353,3 +353,11 @@ input:checked + .slider:before {
 .cancel-btn:hover {
     background-color: #5a6268;
 }
+
+.excel-empty-state {
+    padding: 12px 14px;
+    border: 1px dashed #bbb;
+    border-radius: 6px;
+    color: #666;
+    background: #fafafa;
+}

@@ -84,10 +84,9 @@
         <div class="label-card">
             <img class="qr-img" src="{{ item.qr_base64 }}" alt="QR-код">
             <div class="item-info">
-                <strong>{{ item.name }}</strong><br>
-                ID: {{ item.id }}<br>
-                Изделие: {{ item.product }}<br>
-                Место: {{ item.placement_location or '—' }}
+                {% for column in label_columns if item.get(column) %}
+                    {{ column }}: {{ item.get(column) }}<br>
+                {% endfor %}
             </div>
             <button class="printSingleBtn" data-id="{{ item.id }}">Печать</button>
         </div>
