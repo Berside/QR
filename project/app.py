@@ -1,5 +1,6 @@
 import os
 import uuid
+from threading import Lock
 from flask import Flask, render_template, request, jsonify, redirect, send_file, send_from_directory
 import pandas as pd
 import io
@@ -32,6 +33,7 @@ EXCEL_COLUMNS = [
 ]
 
 packing_list = []
+printer_lock = Lock()
 
 # EXCEL_FILE = 'warehouse.xlsx'
 
@@ -86,8 +88,9 @@ def generate_qr_image_for_print(data, item):
     # Размер наклейки
     # ---------------------------------------------------------
 
-    # B31 has a 384-dot print width at 203 dpi (about 48 mm).
+    # Artwork width; independent of the B31 printhead width (600 dots).
     LABEL_WIDTH_MM = 48
+    # Physical label only: the 6 mm gap is found by the gap sensor (label type 1).
     LABEL_HEIGHT_MM = 30
     ARTWORK_HEIGHT_MM = 25
 
@@ -164,7 +167,7 @@ def generate_qr_image_for_print(data, item):
     # ПЕРЕВОДИМ РАЗМЕРЫ В PIXEL
     # =========================================================
 
-    target_width = int(LABEL_WIDTH_MM / 25.4 * DPI)
+    target_width = mm_to_px(LABEL_WIDTH_MM)
 
     target_height = mm_to_px(LABEL_HEIGHT_MM)
     artwork_height = mm_to_px(ARTWORK_HEIGHT_MM)
@@ -1174,52 +1177,28 @@ def print_item(item_id):
     if not item:
         return jsonify({'error': 'Предмет не найден'}), 404
 
-    # Генерируем QR
-    qr_buffer = generate_qr_image_for_print(item['id'], item)
-    filename = f'qr_{item_id}.png'
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    # filepath = 'C:\\Users\\EvGen\\Desktop\\QR\\project\\' + filepath
-    with open(filepath, 'wb') as f:
-        f.write(qr_buffer.getvalue())
-
+    if not printer_lock.acquire(blocking=False):
+        return jsonify({'error': 'Принтер занят. Дождитесь завершения печати.'}), 409
     try:
-        # Импортируем CLI-функцию
-        from NiimPrintX.NiimPrintX.cli.command import niimbot_cli
-
-        # text = "\\u041f\\u0435\\u0447\\u0430\\u0442\\u044c \\u0432\\u044b\\u043f\\u043e\\u043b\\u043d\\u0435\\u043d\\u0430 \\u0443\\u0441\\u043f\\u0435\\u0448\\u043d\\u043e"
-        # decoded = text.encode('latin1').decode('unicode_escape')
-        # print('!!!!',decoded)
-
-        # Сохраняем оригинальные аргументы командной строки
-        original_argv = sys.argv
-
-        sys.argv = [
-            'niimbot_cli',  
-            'print',
-            '-m', 'b31',
-            '-d', '3',
-            '-n', '1',
-            # '-r', '90',
-            '-i', filepath
-        ]
-
+        qr_buffer = generate_qr_image_for_print(item['id'], item)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], f'qr_{uuid.uuid4().hex}.png')
         try:
-            # Вызываем CLI. obj={} как в __main__.py
-            niimbot_cli(obj={})
-           
-        except SystemExit as e:
-            if e.code != 0:
-                raise Exception(f"CLI вернул код ошибки {e.code}")
+            with open(filepath, 'wb') as f:
+                f.write(qr_buffer.getvalue())
+            from NiimPrintX.NiimPrintX.cli.command import niimbot_cli
+            niimbot_cli.main(
+                args=['print', '-m', 'b31', '-d', '3', '-n', '1', '-i', filepath],
+                obj={}, standalone_mode=False,
+            )
         finally:
-            sys.argv = original_argv
-            # app.logger.info(f"Печать для {item_id} выполнена успешно")
-            # return jsonify({f"message": "Печать выполнена успешно"}), 200
-            return jsonify({'status': 'success', 'message': 'Печать выполнена'}), 200
-
+            if os.path.exists(filepath):
+                os.remove(filepath)
+        return jsonify({'status': 'success', 'message': 'Печать выполнена'}), 200
     except Exception as e:
-        app.logger.error(f"Ошибка печати: {str(e)}")
-        traceback.print_exc()
-        return jsonify({f"error": 'Ошибка печати', 'details': str(e)}), 500
+        app.logger.exception("Ошибка печати")
+        return jsonify({'error': 'Ошибка печати', 'details': str(e)}), 500
+    finally:
+        printer_lock.release()
 
 
 

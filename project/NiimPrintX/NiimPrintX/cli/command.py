@@ -49,6 +49,7 @@ def niimbot_cli(ctx, verbose):
 @click.option(
     "-n",
     "--quantity",
+    type=click.IntRange(1, 65535),
     default=1,
     show_default=True,
     help="Print quantity",
@@ -85,43 +86,33 @@ def niimbot_cli(ctx, verbose):
 def print_command(model, density, rotate, image, quantity, vertical_offset, horizontal_offset):
     logger.info(f"Niimbot Printing Start")
 
-    print("SSSS", model)
-
-    if model in ("b1", "b18", "b21", "b31"):
-        max_width_px = 384
-    if model in ("d11", "d110"):
-        max_width_px = 400
-
+    model = model.lower()
+    max_width_px = 600 if model == "b31" else (384 if model in ("b1", "b18", "b21") else 400)
     if model in ("b18", "d11", "d110") and density > 3:
         density = 3
     try:
-        image = Image.open(image)
-
+        with Image.open(image) as source:
+            image = source.copy()
         if rotate != "0":
-            # PIL library rotates counterclockwise, so we need to multiply by -1
             image = image.rotate(-int(rotate), expand=True)
-        assert image.width <= max_width_px, f"Image width too big for {model.upper()}"
+        if image.width > max_width_px:
+            raise ValueError(f"Image width too big for {model.upper()}: {image.width} > {max_width_px}")
         asyncio.run(_print(model, density, image, quantity, vertical_offset, horizontal_offset))
-    except Exception as e:
-        logger.info(f"{e}")
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
 
- 
+
 async def _print(model, density, image, quantity, vertical_offset, horizontal_offset):
+    print_info("Starting print job")
+    device = await find_device(model)
+    printer = PrinterClient(device)
     try:
-        print_info("Starting print job")
-        device = await find_device(model)
-        print("LLLLL")
-        printer = PrinterClient(device)
-        # print("model ", model, " density ", density, " image ", image, " vertical_offset ", vertical_offset, " horizontal_offset ", horizontal_offset )
-        if await printer.connect():
-            print(f"Connected to {device.name}")
-        await printer.print_image(image, density=density, quantity=quantity, vertical_offset=vertical_offset,
-                                  horizontal_offset=horizontal_offset)
+        if not await printer.connect():
+            raise RuntimeError("Cannot connect to printer")
+        await printer.print_image(image, density=density, quantity=quantity,
+                                  vertical_offset=vertical_offset, horizontal_offset=horizontal_offset)
         print_success("Print job completed")
-        await printer.disconnect()
-    except Exception as e:
-        logger.debug(f"{e}")
-        print("fffff", e)
+    finally:
         await printer.disconnect()
 
 

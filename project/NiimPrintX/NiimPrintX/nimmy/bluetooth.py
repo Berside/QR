@@ -8,12 +8,9 @@ logger = get_logger()
 
 
 async def find_device(device_name_prefix=None):
-    device_name_prefix = 'B31'
+    device_name_prefix = device_name_prefix or 'B31'
     devices = await BleakScanner.discover()
-    print("ALL DEVICES", devices)
     for device in devices:
-        print("iiii", device.name)
-        print("oooo", device_name_prefix)
         if device.name and device.name.lower().startswith(device_name_prefix.lower()):
             return device
     raise BLEException(f"Failed to find device {device_name_prefix}")
@@ -66,10 +63,23 @@ class BLETransport:
             await self.client.disconnect()
 
     async def write(self, data, char_uuid):
-        if self.client and self.client.is_connected:
-            await self.client.write_gatt_char(char_uuid, data)
-        else:
+        if not self.client or not self.client.is_connected:
             raise BLEException("BLE client is not connected.")
+        characteristic = self.client.services.get_characteristic(char_uuid)
+        if characteristic is None:
+            raise BLEException("Printer characteristic is unavailable.")
+        # Prefer acknowledged writes so a busy BLE stack cannot drop image rows.
+        response = "write" in characteristic.properties
+        if not response and "write-without-response" not in characteristic.properties:
+            raise BLEException("Printer characteristic is not writable.")
+        chunk_size = 512 if response else characteristic.max_write_without_response_size
+        for offset in range(0, len(data), chunk_size):
+            await self.client.write_gatt_char(
+                characteristic, data[offset:offset + chunk_size], response=response
+            )
+            if not response:
+                # No ATT acknowledgement: pace each MTU-sized fragment, not just rows.
+                await asyncio.sleep(0.02)
 
     async def start_notification(self, char_uuid, handler):
         if self.client and self.client.is_connected:

@@ -1,7 +1,6 @@
 import enum
 import asyncio
 import struct
-import math
 from PIL import Image, ImageOps
 from .exception import BLEException, PrinterException
 from .bluetooth import BLETransport
@@ -49,11 +48,18 @@ class PrinterClient:
         self.transport = BLETransport()
         self.notification_event = asyncio.Event()
         self.notification_data = None
+        self.expected_responses = set()
+        self.notification_buffer = bytearray()
+        self.notifications_started = False
+        self.printer_error = None
 
     async def connect(self):
         if await self.transport.connect(self.device):
             if not self.char_uuid:
                 await self.find_characteristics()
+            if not self.notifications_started:
+                await self.transport.start_notification(self.char_uuid, self.notification_handler)
+                self.notifications_started = True
             logger.info(f"Successfully connected to {self.device.name}")
             return True
         logger.error("Connection failed.")
@@ -61,6 +67,9 @@ class PrinterClient:
 
     async def disconnect(self):
         await self.transport.disconnect()
+        self.notifications_started = False
+        self.notification_buffer.clear()
+        self.printer_error = None
         logger.info(f"Printer {self.device.name} disconnected.")
 
     async def find_characteristics(self):
@@ -76,102 +85,145 @@ class PrinterClient:
 
             services[service.uuid] = s
 
-        for service_id, characteristics in services.items():
-            if len(characteristics) == 1:  # Check if there's exactly one characteristic
-                props = characteristics[0]['properties']
-                if 'read' in props and 'write-without-response' in props and 'notify' in props:
-                    self.char_uuid = characteristics[0]['id']  # Return the service ID that meets the criteria
+        for characteristics in services.values():
+            for characteristic in characteristics:
+                props = characteristic['properties']
+                if 'notify' in props and ('write' in props or 'write-without-response' in props):
+                    self.char_uuid = characteristic['id']
+                    break
+            if self.char_uuid:
+                break
         if not self.char_uuid:
             raise PrinterException("Cannot find bluetooth characteristics.")
 
     async def send_command(self, request_code, data, timeout=10):
+        if not self.transport.client or not self.transport.client.is_connected:
+            if not await self.connect():
+                raise BLEException("Cannot connect to printer.")
+        self._raise_printer_error()
+        # Unsolicited row/status notifications must not acknowledge another command.
+        responses = {
+            0x1A: {0x1B}, 0xDC: {0xD9, 0xDD, 0xDE, 0xDF},
+            0x21: {0x31}, 0x23: {0x33}, 0x01: {0x02}, 0x03: {0x04},
+            0x13: {0x14}, 0x15: {0x16}, 0x20: {0x30},
+            0xE3: {0xE4}, 0xF3: {0xF4}, 0xA3: {0xB3},
+        }
+        self.expected_responses = ({0x40 + data[0]} if request_code == 0x40
+                                   else responses[request_code])
+        self.notification_data = None
+        self.notification_event.clear()
         try:
-            if not self.transport.client or not self.transport.client.is_connected:
-                await self.connect()
-            packet = NiimbotPacket(request_code, data)
-            await self.transport.start_notification(self.char_uuid, self.notification_handler)
-            await self.transport.write(packet.to_bytes(), self.char_uuid)
-            logger.debug(f"Printer command sent - {RequestCodeEnum(request_code).name}")
-            await asyncio.wait_for(self.notification_event.wait(), timeout)  # Wait until the notification event is set
-            response = NiimbotPacket.from_bytes(self.notification_data)
-            await self.transport.stop_notification(self.char_uuid)
-            self.notification_event.clear()  # Reset the event for the next notification
-            return response
-        except asyncio.TimeoutError:
-            logger.error(f"Timeout occurred for request {RequestCodeEnum(request_code).name}")
-        except BLEException as e:
-            logger.error(f"An error occurred: {e}")
+            await self.transport.write(NiimbotPacket(request_code, data).to_bytes(), self.char_uuid)
+            await asyncio.wait_for(self.notification_event.wait(), timeout)
+            packet = self.notification_data
+            if packet.type == 0xDB:
+                raise PrinterException(f"Printer error: {packet.data.hex()}")
+            return packet
+        except asyncio.TimeoutError as exc:
+            raise PrinterException(
+                f"Timeout waiting for {RequestCodeEnum(request_code).name}"
+            ) from exc
+        finally:
+            self.expected_responses = set()
 
     async def write_raw(self, data):
-        try:
-            if not self.transport.client or not self.transport.client.is_connected:
-                await self.connect()
-            await self.transport.write(data.to_bytes(), self.char_uuid)
-        except BLEException as e:
-            logger.error(f"An error occurred: {e}")
+        # Reconnecting here would lose the active page; fail instead of losing rows.
+        self._raise_printer_error()
+        await self.transport.write(data.to_bytes(), self.char_uuid)
+
+    def _raise_printer_error(self):
+        if self.printer_error is not None:
+            raise PrinterException(f"Printer error: {self.printer_error.hex()}")
 
     async def write_no_notify(self, request_code, data):
-        try:
-            if not self.transport.client or not self.transport.client.is_connected:
-                await self.connect()
-            packet = NiimbotPacket(request_code, data)
-            await self.transport.write(packet.to_bytes(), self.char_uuid)
-        except BLEException as e:
-            logger.error(f"An error occurred: {e}")
+        await self.write_raw(NiimbotPacket(request_code, data))
 
     def notification_handler(self, sender, data):
-        # print(f"Notification from {sender}: {data}")
-        logger.trace(f"Notification: {data}")
-        self.notification_data = data
-        self.notification_event.set()
+        # A notification may contain a partial frame or several complete frames.
+        self.notification_buffer.extend(data)
+        while len(self.notification_buffer) >= 4:
+            if self.notification_buffer[:2] != b"\x55\x55":
+                del self.notification_buffer[0]
+                continue
+            size = self.notification_buffer[3] + 7
+            if len(self.notification_buffer) < size:
+                return
+            frame = bytes(self.notification_buffer[:size])
+            del self.notification_buffer[:size]
+            try:
+                packet = NiimbotPacket.from_bytes(frame)
+            except (AssertionError, IndexError):
+                logger.warning("Ignoring invalid printer response")
+                continue
+            if packet.type == 0xDB:
+                self.printer_error = packet.data
+            if (packet.type in self.expected_responses or packet.type == 0xDB) and not self.notification_event.is_set():
+                self.notification_data = packet
+                self.notification_event.set()
 
-    async def print_image(self, image: Image, density: int = 3, quantity: int = 1, vertical_offset= 0,
-                          horizontal_offset = 0):
-        await self.set_label_density(density)
-        await self.set_label_type(1)
-        await self.start_print()
-        await self.start_page_print()
-        await self.set_dimension(image.height, image.width)
-        await self.set_quantity(quantity)
+    async def print_image(self, image: Image, density: int = 3, quantity: int = 1,
+                          vertical_offset=0, horizontal_offset=0, timeout=60):
+        if not 1 <= quantity <= 65535:
+            raise ValueError("Quantity must be between 1 and 65535")
+        if not (0 < image.width <= 65535 and 0 < image.height <= 65535):
+            raise ValueError("Invalid image dimensions")
+        # Offsets move artwork inside the label; never change its physical length.
+        image = self._prepare_image(image, vertical_offset, horizontal_offset)
+        for operation, method, args in (
+            ("density", self.set_label_density, (density,)),
+            ("label type", self.set_label_type, (1,)),
+            ("print start", self.start_print, ()),
+            ("page start", self.start_page_print, ()),
+            ("page dimensions", self.set_dimension, (image.height, image.width)),
+            ("quantity", self.set_quantity, (quantity,)),
+        ):
+            if not await method(*args):
+                raise PrinterException(f"Printer rejected {operation}")
 
-        for pkt in self._encode_image(image, vertical_offset, horizontal_offset):
-            # Send each line and wait for a response or status check
+        for pkt in self._encode_image(image):
             await self.write_raw(pkt)
-            # Adding a short delay or status check here can help manage buffer issues
-            await asyncio.sleep(0.01)  # Adjust the delay as needed based on printer feedback
+            await asyncio.sleep(0.01)
 
-        while not await self.end_page_print():
-            await asyncio.sleep(0.05)
+        async def finish():
+            while not await self.end_page_print():
+                await asyncio.sleep(0.1)
+            while True:
+                status = await self.get_print_status()
+                if status['page'] >= quantity:
+                    break
+                await asyncio.sleep(0.1)
+            # A page counter is not an acknowledgement that the job/feed is closed.
+            while not await self.end_print():
+                await asyncio.sleep(0.1)
 
-        while True:
-            status = await self.get_print_status()
-            if status['page'] == quantity:
-                break
-            await asyncio.sleep(0.1)
+        try:
+            await asyncio.wait_for(finish(), timeout)
+        except asyncio.TimeoutError as exc:
+            raise PrinterException("Timed out waiting for print/feed completion") from exc
 
-        await self.end_print()
+    @staticmethod
+    def _prepare_image(image, vertical_offset=0, horizontal_offset=0):
+        canvas = Image.new("RGBA", image.size, "white")
+        canvas.alpha_composite(image.convert("RGBA"), (horizontal_offset, vertical_offset))
+        return canvas.convert("RGB")
 
     def _encode_image(self, image: Image, vertical_offset=0, horizontal_offset=0):
-        # Convert the image to monochrome
+        image = self._prepare_image(image, vertical_offset, horizontal_offset)
         img = ImageOps.invert(image.convert("L")).convert("1")
-
-        # Apply horizontal offset
-        if horizontal_offset > 0:
-            img = ImageOps.expand(img, border=(horizontal_offset, 0, 0, 0), fill=1)
-        else:
-            img = img.crop((-horizontal_offset, 0, img.width, img.height))
-
-        # Add vertical padding for vertical offset
-        img = ImageOps.expand(img, border=(0, vertical_offset, 0, 0), fill=1)
-
+        # Pillow packs each row MSB first and pads its RIGHT edge to a whole byte.
+        # int(bit_string).to_bytes() instead pads on the left for widths like 383.
+        stride = (img.width + 7) // 8
+        bitmap = img.tobytes()
+        is_b31 = (self.device.name or "").lower().startswith("b31")
         for y in range(img.height):
-            line_data = [img.getpixel((x, y)) for x in range(img.width)]
-            line_data = "".join("0" if pix == 0 else "1" for pix in line_data)
-            line_data = int(line_data, 2).to_bytes(math.ceil(img.width / 8), "big")
-            counts = (0, 0, 0)  # It seems like you can always send zeros
+            line_data = bitmap[y * stride:(y + 1) * stride]
+            counts = (0, 0, 0)
+            if is_b31:
+                # B31 has 600 head dots: three 200-dot / 25-byte segments.
+                counts = tuple(sum(byte.bit_count() for byte in line_data[i:i + 25])
+                               for i in (0, 25, 50))
             header = struct.pack(">H3BB", y, *counts, 1)
-            pkt = NiimbotPacket(0x85, header + line_data)
-            yield pkt
+            yield NiimbotPacket(0x85, header + line_data)
 
     async def get_info(self, key):
         response = await self.send_command(RequestCodeEnum.GET_INFO, bytes((key,)))
@@ -283,9 +335,9 @@ class PrinterClient:
         packet = await self.send_command(RequestCodeEnum.ALLOW_PRINT_CLEAR, b"\x01")
         return bool(packet.data[0])
 
-    async def set_dimension(self, w, h):
+    async def set_dimension(self, rows, columns):
         packet = await self.send_command(
-            RequestCodeEnum.SET_DIMENSION, struct.pack(">HH", w, h)
+            RequestCodeEnum.SET_DIMENSION, struct.pack(">HH", rows, columns)
         )
         return bool(packet.data[0])
 
@@ -296,13 +348,5 @@ class PrinterClient:
     async def get_print_status(self):
         packet = await self.send_command(RequestCodeEnum.GET_PRINT_STATUS, b"\x01")
 
-        page, progress1, progress2 = struct.unpack(">HBB", packet.data)
+        page, progress1, progress2 = struct.unpack(">HBB", packet.data[:4])
         return {"page": page, "progress1": progress1, "progress2": progress2}
-
-    def __del__(self):
-        if self.transport.client.is_connected:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(self.disconnect())
-            else:
-                loop.run_until_complete(self.disconnect())
