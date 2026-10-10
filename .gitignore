@@ -26,5 +26,3 @@ build/
 dist/
 *.egg-info/
 
-# Separate printer utility projects
-/project/NiimPrintX/
