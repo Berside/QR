@@ -16,9 +16,9 @@
             gap: 16px;
         }
         .label-card {
-            width: 180px;
+            width: 400px;
             padding: 8px;
-            border: 1px solid #ccc;
+            border: 0;
             border-radius: 8px;
             text-align: center;
             page-break-inside: avoid;
@@ -26,8 +26,9 @@
             margin-bottom: 10px;
         }
         .qr-img {
-            width: 150px;
-            height: 150px;
+            width: 384px;
+            max-width: 100%;
+            height: auto;
             margin: 0 auto;
         }
         .item-info {
@@ -40,16 +41,18 @@
             font-size: 16px;
         }
         @media print {
-            button {
+            body { padding: 0; }
+            .labels-container { display: block; }
+            button, .editor-link {
                 display: none;
             }
             .label-card {
                 page-break-after: always;
                 break-after: page;
-                width: 60mm;
+                width: 48mm;
                 height: 30mm;
-                padding: 2mm;
-                margin: 10px;
+                padding: 0;
+                margin: 0;
                 box-sizing: border-box;
             
                 display: flex;
@@ -66,28 +69,28 @@
                 text-align: left;
             }
             .qr-img {
-                width: 25mm;
-                height: 25mm;
+                width: 48mm;
+                height: 30mm;
                 flex-shrink: 0;
             }
             @page {
-                size: 80mm 40mm;
+                size: 48mm 30mm;
                 margin: 0mm;
             }
         }
     </style>
 </head>
 <body>
+    <a class="editor-link" href="/label-editor">Редактор этикеток</a>
     <button id="printBtn">Печатать</button>
     <div class="labels-container">
         {% for item in items %}
         <div class="label-card">
-            <img class="qr-img" src="{{ item.qr_base64 }}" alt="QR-код">
-            <div class="item-info">
-                {% for column in label_columns if item.get(column) %}
-                    {{ column }}: {{ item.get(column) }}<br>
-                {% endfor %}
-            </div>
+            {% if item.label_error %}
+            <p>Предмет {{ item.id }}: {{ item.label_error }}</p>
+            {% else %}
+            <img class="qr-img" src="{{ item.qr_base64 }}" alt="Этикетка {{ item.id }}">
+            {% endif %}
             <button class="printSingleBtn" data-id="{{ item.id }}">Печать</button>
         </div>
         {% endfor %}

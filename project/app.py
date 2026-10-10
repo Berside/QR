@@ -22,6 +22,8 @@ from werkzeug.utils import secure_filename
 from pathlib import Path
 
 
+from label_editor import active_template, font as label_font, register as register_label_editor, render as render_label
+
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['EXCEL_FILE'] = None
@@ -80,6 +82,17 @@ def generate_qr_image(data):
     return qr
 
 def generate_qr_image_for_print(data, item, columns=None):
+    template = active_template(app)
+    if template is not None:
+        return render_label(template, dict(item, id=data), label_background_image())
+    return generate_default_label(data, item, columns)
+
+
+def label_background_image():
+    return generate_default_label('', {}, header_only=True)
+
+
+def generate_default_label(data, item, columns=None, header_only=False):
 
     # =========================================================
     # НАСТРОЙКИ
@@ -159,7 +172,7 @@ def generate_qr_image_for_print(data, item, columns=None):
     # PNG КАРТИНКА В ШАПКЕ
     # ---------------------------------------------------------
 
-    HEADER_IMAGE_PATH = "warehouse.png"
+    HEADER_IMAGE_PATH = str(Path(__file__).with_name("warehouse.png"))
 
     # ---------------------------------------------------------
     # Текст шапки
@@ -372,9 +385,7 @@ def generate_qr_image_for_print(data, item, columns=None):
     # ТЕКСТ ШАПКИ
     # =========================================================
 
-    header_font = ImageFont.truetype(
-        "C:/Windows/Fonts/Arial.ttf",
-        HEADER_FONT_SIZE
+    header_font = label_font(HEADER_FONT_SIZE
     )
 
     header_bbox = draw.textbbox(
@@ -455,6 +466,12 @@ def generate_qr_image_for_print(data, item, columns=None):
         body_bottom
         - body_top
     )
+
+    if header_only:
+        buf = BytesIO()
+        final.save(buf, format="PNG")
+        buf.seek(0)
+        return buf
 
     # =========================================================
     # QR-КОД
@@ -690,9 +707,7 @@ def generate_qr_image_for_print(data, item, columns=None):
         -1
     ):
 
-        test_font = ImageFont.truetype(
-            "C:/Windows/Fonts/Arial.ttf",
-            font_size
+        test_font = label_font(font_size
         )
 
         test_lines = build_lines(
@@ -737,9 +752,7 @@ def generate_qr_image_for_print(data, item, columns=None):
     # используем его всё равно.
     if selected_font is None:
 
-        selected_font = ImageFont.truetype(
-            "C:/Windows/Fonts/Arial.ttf",
-            MIN_TEXT_FONT_SIZE
+        selected_font = label_font(MIN_TEXT_FONT_SIZE
         )
 
         selected_lines = build_lines(
@@ -875,6 +888,8 @@ def generate_qr_image_for_page(data):
     buf.seek(0)
     return buf
 
+register_label_editor(app, label_background_image, load_columns, load_items)
+
 # --- Маршруты (URL) сайта ---
 @app.route('/')
 def index():
@@ -895,9 +910,12 @@ def print_labels():
     label_columns = [column for column in LABEL_COLUMNS if column in columns]
     # Для каждого предмета генерируем QR-код и превращаем в base64
     for item in items:
-        qr_buffer = generate_qr_image_for_page(item['id'])  
-        qr_base64 = base64.b64encode(qr_buffer.getvalue()).decode('utf-8')
-        item['qr_base64'] = f"data:image/png;base64,{qr_base64}"
+        try:
+            qr_buffer = generate_qr_image_for_print(item['id'], item, columns)
+            qr_base64 = base64.b64encode(qr_buffer.getvalue()).decode('utf-8')
+            item['qr_base64'] = f"data:image/png;base64,{qr_base64}"
+        except ValueError as exc:
+            item['label_error'] = str(exc)
     return render_template('print.html', items=items, label_columns=label_columns)
 
 
@@ -1105,6 +1123,8 @@ def print_item(item_id):
             if os.path.exists(filepath):
                 os.remove(filepath)
         return jsonify({'status': 'success', 'message': 'Печать выполнена'}), 200
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         app.logger.exception("Ошибка печати")
         return jsonify({'error': 'Ошибка печати', 'details': str(e)}), 500
