@@ -32,7 +32,7 @@ def niimbot_cli(ctx, verbose):
 @click.option(
     "-m",
     "--model",
-    type=click.Choice(["b1", "b18", "b21", "d11", "d110"], False),
+    type=click.Choice(["b1", "b18", "b21", "b31", "d11", "d110"], False),
     # default="d110",
     default="d110",
     show_default=True,
@@ -87,7 +87,7 @@ def print_command(model, density, rotate, image, quantity, vertical_offset, hori
 
     print("SSSS", model)
 
-    if model in ("b1", "b18", "b21"):
+    if model in ("b1", "b18", "b21", "b31"):
         max_width_px = 384
     if model in ("d11", "d110"):
         max_width_px = 400
@@ -129,7 +129,7 @@ async def _print(model, density, image, quantity, vertical_offset, horizontal_of
 @click.option(
     "-m",
     "--model",
-    type=click.Choice(["b1", "b18", "b21", "d11", "d110"], False),
+    type=click.Choice(["b1", "b18", "b21", "b31", "d11", "d110"], False),
     default="d110",
     show_default=True,
     help="Niimbot printer model",

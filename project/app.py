@@ -26,6 +26,11 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['EXCEL_FILE'] = None
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+EXCEL_COLUMNS = [
+    'id', 'product', 'placement_location', 'current_count',
+    'available_count', 'image', 'document', 'analogue',
+]
+
 packing_list = []
 
 # EXCEL_FILE = 'warehouse.xlsx'
@@ -38,6 +43,8 @@ def load_items():
     if not excel_path or not os.path.exists(excel_path):
         return []
     df = pd.read_excel(excel_path, dtype={'id': str}, keep_default_na=False)
+    if 'id' not in df.columns:
+        return []
     df['id'] = df['id'].str.strip()
     return df.to_dict(orient='records')
 
@@ -46,7 +53,9 @@ def save_items(items):
     excel_path = app.config.get('EXCEL_FILE')
     if not excel_path:
         raise RuntimeError('Excel файл не выбран')
-    df = pd.DataFrame(items)
+    # Keep the headers even when the last table row is deleted, while retaining
+    # any extra columns present in a non-empty imported workbook.
+    df = pd.DataFrame(items) if items else pd.DataFrame(columns=EXCEL_COLUMNS)
     df.to_excel(excel_path, index=False)
 
 
@@ -77,18 +86,16 @@ def generate_qr_image_for_print(data, item):
     # Размер наклейки
     # ---------------------------------------------------------
 
-    LABEL_WIDTH_MM = 50
-    LABEL_HEIGHT_MM = 22
-
-    # Расстояние между физическими наклейками на бумаге.
-    # Меняется в зависимости от типа бумаги.с
-    BOTTOM_GAP_MM = 12
+    # B31 has a 384-dot print width at 203 dpi (about 48 mm).
+    LABEL_WIDTH_MM = 48
+    LABEL_HEIGHT_MM = 30
+    ARTWORK_HEIGHT_MM = 25
 
     # ---------------------------------------------------------
     # Сдвиг всей печати вправо
     # ---------------------------------------------------------
 
-    SHIFT_X_MM = 2
+    SHIFT_X_MM = 1
 
     # ---------------------------------------------------------
     # Максимальный размер основного текста
@@ -113,7 +120,7 @@ def generate_qr_image_for_print(data, item):
     # Высота шапки
     # ---------------------------------------------------------
 
-    HEADER_HEIGHT_MM = 7
+    HEADER_HEIGHT_MM = 6
 
     # ---------------------------------------------------------
     # Размер QR-кода
@@ -159,19 +166,9 @@ def generate_qr_image_for_print(data, item):
 
     target_width = int(LABEL_WIDTH_MM / 25.4 * DPI)
 
-    target_height = int(
-    (LABEL_HEIGHT_MM + BOTTOM_GAP_MM) / 25.4 * DPI
-    )
-
-    # Высота реальной области наклейки
-    label_height = int(
-        LABEL_HEIGHT_MM / 25.4 * DPI
-    )
-
-    # Высота пустого пространства снизу
-    bottom_gap = int(
-        BOTTOM_GAP_MM / 25.4 * DPI
-    )
+    target_height = mm_to_px(LABEL_HEIGHT_MM)
+    artwork_height = mm_to_px(ARTWORK_HEIGHT_MM)
+    artwork_top = (target_height - artwork_height) // 2
 
     shift_x = mm_to_px(
         SHIFT_X_MM
@@ -219,7 +216,7 @@ def generate_qr_image_for_print(data, item):
 
     frame_left = margin + shift_x
 
-    frame_top = margin
+    frame_top = artwork_top
 
     frame_right = (
         target_width
@@ -228,11 +225,7 @@ def generate_qr_image_for_print(data, item):
         + shift_x
     )
 
-    frame_bottom = (
-        target_height
-        - margin
-        - 1
-    )
+    frame_bottom = artwork_top + artwork_height - 1
 
     # Не даём рамке выйти за изображение
     frame_right = min(
@@ -1203,11 +1196,9 @@ def print_item(item_id):
         sys.argv = [
             'niimbot_cli',  
             'print',
-            '-m', 'd11',
-            # '-m', 'b31',
+            '-m', 'b31',
             '-d', '3',
             '-n', '1',
-            '--ho', '-8',
             # '-r', '90',
             '-i', filepath
         ]
