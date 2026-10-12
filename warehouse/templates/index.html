@@ -2,28 +2,34 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Управление</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1>Учёт</h1>
+    <main class="container app-main">
+        <div class="page-heading">
+            <div><div class="eyebrow">Панель управления</div><h1>Товары и остатки</h1><p>Работа с базой предметов, Excel-файлом и печатью этикеток.</p></div>
         <div class="qr-buttons">
-            <a href="/label-editor">Редактор этикеток</a>
-            <button id="allQrBtn">Все QR</button>
-            <button id="scan">Сканирование QR</button>
+            <a href="/label-editor"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg>Редактор</a>
+            <button id="allQrBtn"><svg class="icon" viewBox="0 0 24 24"><path d="M5 3h5v5H5zM14 3h5v5h-5zM5 16h5v5H5zM15 15h2v2h-2zM18 18h2v2h-2z"/></svg>Все QR</button>
+            <button id="scan" class="primary"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 8h8v8H8z"/></svg>Сканировать</button>
+        </div>
         </div>
         <div class="add-item-form">
-            <h2>Добавить новый предмет</h2>
+            <div class="section-heading"><div class="section-title"><span class="section-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><div><h2>Добавить новый предмет</h2><p>Заполните доступные поля загруженной таблицы.</p></div></div></div>
             {% if columns %}
+            <div class="form-grid">
             {% for column in columns if column not in ['id', 'image', 'document'] %}
             <label>{{ column }}
                 <input type="text" class="form-input item-column" data-column="{{ column }}" placeholder="{{ column }}">
             </label>
             {% endfor %}
-            <div class="image-upload">
+            <div class="file-control">
                 <input type="file" id="itemImage" accept=".png,.jpg,.jpeg">
-                <div class="image-upload__hint">Перетащите изображения или нажмите для выбора</div>
+                <div class="image-upload__hint"><svg class="icon" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>Выбрать изображение</div>
+            </div>
             </div>
 
             <!-- <div class="document-upload">
@@ -31,11 +37,10 @@
                 <div class="document-upload__hint">Перетащите документ или нажмите для выбора</div>
             </div> -->
             
-            <button id="addItemBtn">Добавить</button>
+            <div class="form-actions"><button id="addItemBtn"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Добавить предмет</button><p id="addMessage" class="message"></p></div>
             {% else %}
             <p class="excel-empty-state">Сначала загрузите Excel.</p>
             {% endif %}
-            <p id="addMessage"></p>
         </div>
 
         <div class="items-list">
@@ -43,10 +48,10 @@
                 Таблица была изменена
             </div>
 
-            <h2>Текущие предметы</h2>
+            <div class="section-heading"><div class="section-title"><span class="section-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 10h16M9 10v9"/></svg></span><div><h2>Текущие предметы</h2><p>Данные синхронизированы с выбранным Excel-файлом.</p></div></div></div>
             <div class="excel-form">
                 <input type="file" id="excelFile" accept=".xlsx,.xls">
-                <button id="downloadExcelBtn">Скачать измененный Excel</button>
+                <button id="downloadExcelBtn"><svg class="icon" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>Скачать Excel</button>
                 <p id="excelMessage"></p>
             </div>
 
@@ -55,7 +60,7 @@
             {% endif %}
 
             {% if columns %}
-            <table border="1">
+            <div class="table-shell"><table>
                 <thead>
                     <tr>
                         {% for column in columns %}<th>{{ column }}</th>{% endfor %}
@@ -77,15 +82,15 @@
                             {% endfor %}
                             <!-- <td><button class="printOneBtn" data-id="{{ item.id }}">Печать QR</button></td> -->
                             <td class="action-buttons">
-                                <button class="printOneBtn" data-id="{{ item.id }}">Печать QR</button>
-                                <button class="editBtn" data-id="{{ item.id }}">Редактировать</button>
-                                <button class="deleteBtn" data-id="{{ item.id }}">Удалить</button>
+                                <button class="printOneBtn" data-id="{{ item.id }}" title="Печать QR">Печать</button>
+                                <button class="editBtn" data-id="{{ item.id }}" title="Редактировать">Изменить</button>
+                                <button class="deleteBtn" data-id="{{ item.id }}" title="Удалить">Удалить</button>
                             </td>
                         </tr>
                         {% endfor %}
                     {%endif%}
                 </tbody>
-            </table>
+            </table></div>
             {% else %}
             <p class="excel-empty-state">Загрузите Excel-файл, чтобы увидеть его здесь.</p>
             {% endif %}
@@ -106,20 +111,21 @@
                 </form>
             </div>
         </div>
-    </div>
+    </main>
     <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <script src="{{ url_for('static', filename='ui.js') }}"></script>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.querySelector('#toastRegion').appendChild(toast);
+            requestAnimationFrame(() => toast.classList.add('show'));
+            setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 250); }, 4500);
+        }
 
-            function showToast(message, type = 'success') {
-                const toast = document.createElement('div');
-                toast.className = `toast ${type}`;
-                toast.textContent = message;
-                document.querySelector('#toastRegion').appendChild(toast);
-                requestAnimationFrame(() => toast.classList.add('show'));
-                setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 250); }, 4500);
-            }
+        document.addEventListener('DOMContentLoaded', function() {
 
             const fileInput = document.querySelector('#excelFile');
             const excelMessage = document.querySelector('#excelMessage');
@@ -175,7 +181,7 @@
                             : `Выбрано: ${count} файла(ов)`;
                         }
                         else{
-                            alert('Поддерживаются только изображения в формате PNG, JPG или JPEG');
+                            showToast('Поддерживаются только изображения PNG, JPG или JPEG', 'error');
                         }
                     } 
                 else {
@@ -383,7 +389,7 @@
                 if (response.ok) {
                     markTableChanged();
                     editModal.classList.remove('show');
-                    alert('Предмет отредактирован!');
+                    showToast('Изменения предмета сохранены');
                     const row = document.querySelector(`tr[data-id="${itemId}"]`);
                     Object.entries(values).forEach(([column, value]) => {
                         const cell = row.querySelector(`[data-column="${CSS.escape(column)}"]`);
@@ -391,11 +397,11 @@
                     });
                     // window.location.reload();
                 } else {
-                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                    showToast(data.error || 'Не удалось сохранить изменения', 'error');
                 }
             } catch (error) {
                 console.error('Ошибка:', error);
-                alert('Ошибка при редактировании');
+                showToast('Ошибка соединения при редактировании', 'error');
             }
         });
 
@@ -417,14 +423,14 @@
             
                     if (response.ok) {
                         markTableChanged();
-                        alert('Предмет удален!');
-                        window.location.reload();
+                        showToast('Предмет удалён');
+                        setTimeout(() => window.location.reload(), 450);
                     } else {
-                        alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                        showToast(data.error || 'Не удалось удалить предмет', 'error');
                     }
                 } catch (error) {
                     console.error('Ошибка:', error);
-                    alert('Ошибка при удалении');
+                    showToast('Ошибка соединения при удалении', 'error');
                 }
             });
         });

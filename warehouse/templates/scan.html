@@ -2,13 +2,15 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Сканирование QR-кода</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}">
     <script src="{{ url_for('static', filename='jsQR.js') }}"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>Сканирование QR-кода</h1>
+    <main class="container app-main">
+        <div class="page-heading"><div><div class="eyebrow">Камера и QR-коды</div><h1>Сканирование</h1><p>Найдите предмет или последовательно сформируйте укладочный лист.</p></div><nav class="qr-buttons page-nav" aria-label="Навигация"><a href="/"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 10h16M9 10v9"/></svg>Товары</a><a href="/label-editor"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg>Редактор</a><a href="/print_labels"><svg class="icon" viewBox="0 0 24 24"><path d="M5 3h5v5H5zM14 3h5v5h-5zM5 16h5v5H5zM15 15h2v2h-2zM18 18h2v2h-2z"/></svg>Все QR</a></nav></div>
 
         <div class="mode-switch-container">
             <span class="mode-label">Найти по QR</span>
@@ -33,14 +35,19 @@
             <p id="operation-help" class="operation-help"></p>
         </section>
 
-        <button id="startScanBtn">Начать сканирование</button>
-        <div class="scanner-box">
-            <video id="video" autoplay playsinline></video>
-            <canvas id="canvas" style="display: none;"></canvas>
-        </div>
-        <div id="result">
-            <p>Наведите камеру на QR-код...</p>
-        </div>
+        <section class="scanner-card card">
+            <div class="scanner-view">
+                <button id="startScanBtn"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 8h8v8H8z"/></svg>Начать сканирование</button>
+                <div class="scanner-box">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas" style="display: none;"></canvas>
+                </div>
+            </div>
+            <aside class="scan-side">
+                <div class="scan-help"><strong>Как сканировать</strong><br>Расположите QR-код внутри голубой рамки и держите камеру неподвижно.</div>
+                <div id="result"><p>Наведите камеру на QR-код...</p></div>
+            </aside>
+        </section>
 
         <div id="item-info" style="display: none;">
             <div class="scan-result-header"><h3>Информация о предмете</h3><span id="operation-result" class="operation-badge"></span></div>
@@ -50,7 +57,17 @@
         </div>
         <div id="packing-ui">
             <div id="scan-hint" class="hint">Отсканируйте ящик</div>
+            <div id="packing-controls">
+                <button id="finishPackingBtn">Закончить заполнение</button>
+            </div>
 
+            <div id="packing-finished" style="display: none;">
+                <button id="continuePackingBtn">Продолжить</button>
+                <button id="restartPackingBtn" class="muted-button">Начать заново</button>
+                <button id="printPackingBtn" class="primary">Печать</button>
+            </div>
+
+            <div class="table-shell">
             <table id="itemsTable">
                 <thead>
                     <tr>
@@ -64,16 +81,6 @@
                         <th>Аналог/заменитель</th>
                     </tr>
                 </thead>
-                <div id="packing-controls">
-                    <button id="finishPackingBtn">Закончить заполнение</button>
-                </div>
-
-                <div id="packing-finished" style="display: none;">
-                    <button id="continuePackingBtn">Продолжить</button>
-                    <button id="restartPackingBtn">Начать заново</button>
-                    <button id="printPackingBtn">Печать</button>
-                </div>
-
                 <tbody id="itemsTableBody">
                     {%if items%}
                         {% for item in items %}
@@ -100,9 +107,11 @@
                     {%endif%}
                 </tbody>
             </table>
+            </div>
         </div>
-    </div>
+    </main>
 
+    <script src="{{ url_for('static', filename='ui.js') }}"></script>
     <script>
         const video = document.getElementById('video');
         const canvasElement = document.getElementById('canvas');

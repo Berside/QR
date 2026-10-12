@@ -1,60 +1,11 @@
 <!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Укладочный лист</title>
-    <style>
-        @page{
-            size: A4;
-            margin: 12mm;
-        }
-        body{
-            font-family: sans-serif, Arial;
-        }
-        table{
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td{
-            border: 1px solid black;
-            padding: 5px;
-            text-align: left;
-        }
-    </style>
-</head>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Укладочный лист</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}">
+<style>
+.packing-page{width:min(1400px,calc(100% - 36px));margin:0 auto;padding:28px 0}.packing-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:18px}.packing-head h1{margin:0;color:var(--blue-950)}.packing-head p{margin:5px 0 0;color:var(--muted)}
+@page{size:A4 landscape;margin:12mm}@media print{body{background:white}.no-print{display:none!important}.packing-page{width:auto;margin:0;padding:0}.table-shell{overflow:visible;border:0;border-radius:0}table{min-width:0;font-size:9px}th,td{padding:4px;border:1px solid #7d8b94}th{position:static;color:#111;background:#eef2f4}}
+</style></head>
 <body>
-    <h2>Укладочный лист</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Изделие</th>
-                <th>Место укладки</th>
-                <th>Текущее количество</th>
-                <th>Доступное количество</th>
-                <th>Изображение</th>
-                <th>Вложенный документ</th>
-                <th>Аналог/заменитель</th>
-            </tr>
-        </thead>
-        <tbody>
-            {%for item in items%}
-            <tr>
-                <td>{{item.id}}</td>
-                <td>{{item.product}}</td>
-                <td>{{item.placement_location}}</td>
-                <td>{{item.current_count}}</td>
-                <td>{{item.available_count}}</td>
-                <td>{{item.image}}</td>
-                <td>{{item.document}}</td>
-                <td>{{item.analogue}}</td>
-            </tr>
-            {%endfor%}
-        </tbody>
-    </table>
-    <script>
-        window.print();
-    </script>
-</body>
-</html>
+<main class="packing-page"><div class="packing-head no-print"><div><div class="eyebrow">Предпросмотр документа</div><h1>Укладочный лист</h1><p>Документ откроется в системном окне печати автоматически.</p></div><div class="page-heading-actions"><nav class="qr-buttons page-nav" aria-label="Навигация"><a href="/"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 10h16M9 10v9"/></svg>Товары</a><a href="/scan"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/></svg>Сканирование</a><a href="/label-editor"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg>Редактор</a></nav><button class="primary" onclick="window.print()"><svg class="icon" viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5V9h14v8h-2"/><path d="M7 14h10v6H7z"/></svg>Печать</button></div></div>
+<div class="table-shell"><table><thead><tr><th>ID</th><th>Изделие</th><th>Место укладки</th><th>Текущее количество</th><th>Доступное количество</th><th>Изображение</th><th>Вложенный документ</th><th>Аналог/заменитель</th></tr></thead><tbody>{% for item in items %}<tr><td>{{ item.id }}</td><td>{{ item.product }}</td><td>{{ item.placement_location }}</td><td>{{ item.current_count }}</td><td>{{ item.available_count }}</td><td>{{ item.image }}</td><td>{{ item.document }}</td><td>{{ item.analogue }}</td></tr>{% endfor %}</tbody></table></div></main>
+<script>window.addEventListener('load',()=>window.print());</script></body></html>

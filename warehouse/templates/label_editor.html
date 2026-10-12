@@ -4,14 +4,16 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Редактор этикеток · Niimbot B31</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='label_editor.css') }}">
-<style>#guides{position:absolute;inset:0;pointer-events:none;z-index:3}.guide{display:none;position:absolute;background:#e83e8c;box-shadow:0 0 0 1px #fff8}.guide.visible{display:block}.guide.vertical{top:0;bottom:0;width:1px}.guide.horizontal{left:0;right:0;height:1px}#objects{z-index:4}.object.snapped{box-shadow:0 0 0 2px #e83e8c33}</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='editor_ui.css') }}">
 <script defer src="{{ url_for('static', filename='label_editor.js') }}"></script>
 </head>
 <body>
-<header><a href="/">← К учёту</a><h1>Редактор этикеток</h1><span class="badge">Niimbot B31 · 48 × 30 мм</span></header>
+<div class="editor-page">
+<div class="page-heading"><div><div class="eyebrow">Конструктор макета</div><h1>Редактор этикеток</h1><p>Настройте расположение данных и подготовьте шаблон к печати.</p></div><div class="page-heading-actions"><span class="badge">Niimbot B31 · 48 × 30 мм</span><nav class="qr-buttons page-nav" aria-label="Навигация"><a href="/"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 10h16M9 10v9"/></svg>Товары</a><a href="/scan"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 8h8v8H8z"/></svg>Сканирование</a><a href="/print_labels"><svg class="icon" viewBox="0 0 24 24"><path d="M5 3h5v5H5zM14 3h5v5h-5zM5 16h5v5H5zM15 15h2v2h-2zM18 18h2v2h-2z"/></svg>Все QR</a></nav></div></div>
 <div class="toolbar">
 <label>Шаблоны <select id="templates"><option value="">Новый шаблон</option></select></label>
-<button id="new">+ Новый</button><button id="save" class="primary">Сохранить и использовать</button>
+<button id="new">＋ Новый</button><button id="save" class="primary"><svg class="icon" viewBox="0 0 24 24"><path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h8V4M8 16h8"/></svg>Сохранить и использовать</button>
 <button id="delete-template" class="danger" disabled>Удалить шаблон</button>
 <button id="legacy">Вернуть стандартную печать</button>
 </div>
@@ -47,4 +49,5 @@
 </div>
 </aside>
 </main>
+</div>
 </body></html>
