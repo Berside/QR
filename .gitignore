@@ -14,12 +14,31 @@ __pycache__/
 venv/
 env/
 ENV/
+.local/
+venv_*/
 
 # Local configuration and runtime files
 .env
 .env.*
 !.env.example
 *.log
+instance/uploads/*
+!instance/uploads/.gitkeep
+# Preserve the existing uploaded data; new uploads remain local.
+!instance/uploads/22cb1447bb53487db050b2b2ab94b040_01.png
+!instance/uploads/886c35b0981547349f7c6b69cf84680a_docx
+!instance/uploads/aa2in.png
+!instance/uploads/f3c6773828b7432bbba475ebed148084_warehouse.xlsx
+!instance/uploads/f5c0deb347ee411f91091ae168d45211_01.png
+!instance/uploads/for_printer.txt
+!instance/uploads/old_warehouse.xlsx
+!instance/uploads/qr_123.png
+!instance/uploads/qr_234.png
+!instance/uploads/qr_345.png
+!instance/uploads/shape.png
+!instance/uploads/template_15x30.png
+!instance/uploads/warehouse.xlsx
+instance/*.tmp
 
 # Build artifacts
 build/

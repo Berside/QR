@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Сканирование QR-кода</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='jsQR.js') }}"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Сканирование QR-кода</h1>
+
+        <div class="mode-switch-container">
+            <span class="mode-label">Найти по QR</span>
+  
+            <label class="switch">
+            <input type="checkbox" id="modeToggle">
+            <span class="slider"></span>
+            </label>
+  
+            <span class="mode-label">Сформировать укладочный лист</span>
+        </div>
+
+        <button id="startScanBtn">Начать сканирование</button>
+        <div class="scanner-box">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+        </div>
+        <div id="result">
+            <p>Наведите камеру на QR-код...</p>
+        </div>
+
+        <div id="item-info" style="display: none;">
+            <h3>Информация о предмете</h3>
+            <p><strong>Изделие:</strong> <span id="item-product"></span></p>
+            <p><strong>Местоположение:</strong> <span id="item-placement_location"></span></p>
+            <p><strong>Текущее количество:</strong> <span id="item-current_count"></span></p>
+            <p><strong>Доступное количество:</strong> <span id="item-available_count"></span></p>
+        </div>
+        <div id="packing-ui">
+            <div id="scan-hint" class="hint">Отсканируйте ящик</div>
+
+            <table id="itemsTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Изделие</th>
+                        <th>Место укладки</th>
+                        <th>Текущее количество</th>
+                        <th>Доступное количество</th>
+                        <th>Изображение</th>
+                        <th>Вложенный документ</th>
+                        <th>Аналог/заменитель</th>
+                    </tr>
+                </thead>
+                <div id="packing-controls">
+                    <button id="finishPackingBtn">Закончить заполнение</button>
+                </div>
+
+                <div id="packing-finished" style="display: none;">
+                    <button id="continuePackingBtn">Продолжить</button>
+                    <button id="restartPackingBtn">Начать заново</button>
+                    <button id="printPackingBtn">Печать</button>
+                </div>
+
+                <tbody id="itemsTableBody">
+                    {%if items%}
+                        {% for item in items %}
+                        <tr>
+                            <td>{{ item.id }}</td>
+                            <td>{{ item.product }}</td>
+                            <td>{{ item.placement_location }}</td>
+                            <td>{{ item.current_count }}</td>
+                            <td>{{ item.available_count }}</td>
+                            <td class="image-cell">
+                                <span class="image-name">
+                                    {% if item.image %}Картинка{% else %}—{% endif %}
+                                </span>
+                                {% if item.image %}
+                                <div class="image-preview">
+                                    <img src="{{ item.image }}" alt="Предпросмотр">
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.document }}</td>
+                            <td>{{ item.analogue }}</td>
+                        </tr>
+                        {% endfor %}
+                    {%endif%}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvasElement = document.getElementById('canvas');
+        const canvas = canvasElement.getContext('2d');
+        let isScanning = true;      
+        let scanRequestId = null; 
+        let currentItemId = null;
+
+        const MODE_STORAGE_KEY = 'packingMode';
+
+        const modeToggle = document.getElementById('modeToggle');
+        const hintEl = document.getElementById('scan-hint');
+        const itemsTableBody = document.getElementById('itemsTableBody');
+
+        let packStep = 'box';   // box -> item -> slot
+        let currentBox = null;
+        let pendingItem = null;
+
+        // Запрашиваем доступ к камере
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(stream => {
+                video.srcObject = stream;
+                video.setAttribute("playsinline", true);
+                video.play();
+                if (!scanRequestId) {
+                    requestAnimationFrame(tick);
+                }
+            })
+            .catch(err => {
+                console.error("Ошибка доступа к камере:", err);
+                document.getElementById('result').innerHTML = '<p class="error">Нет доступа к камере. Пожалуйста, разрешите доступ и перезагрузите страницу.</p>';
+            });
+
+        function tick() {
+            if (isScanning && video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvasElement.height = video.videoHeight;
+                canvasElement.width = video.videoWidth;
+                canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+
+                const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+                const qr = jsQR(imageData.data, imageData.width, imageData.height);
+                if (qr && modeToggle.checked) {
+                    handlePackingScan(qr.data);
+                } else if (qr) {
+                    handleFindScan(qr.data);
+                }
+            }
+
+            scanRequestId = requestAnimationFrame(tick);
+        }
+
+        function setHint(text) {
+            hintEl.textContent = text;
+        }
+
+        function appendRow(item) {
+            const row = document.createElement('tr');
+
+            ['id', 'product', 'placement_location', 'current_count', 'available_count'].forEach(field => {
+                const cell = document.createElement('td');
+                cell.textContent = item[field] ?? '';
+                row.appendChild(cell);
+            });
+
+            const imageCell = document.createElement('td');
+            imageCell.className = 'image-cell';
+            const imageNameSpan = document.createElement('span');
+            imageNameSpan.className = 'image-name';
+            imageNameSpan.textContent = item.image ? 'Картинка' : '—';
+            imageCell.appendChild(imageNameSpan);
+            if (item.image) {
+                const previewDiv = document.createElement('div');
+                previewDiv.className = 'image-preview';
+                const img = document.createElement('img');
+                img.src = item.image;
+                img.alt = 'Предпросмотр';
+                previewDiv.appendChild(img);
+                imageCell.appendChild(previewDiv);
+            }
+            row.appendChild(imageCell);
+
+            ['document', 'analogue'].forEach(field => {
+                const cell = document.createElement('td');
+                cell.textContent = item[field] ?? '';
+                row.appendChild(cell);
+            });
+
+            itemsTableBody.appendChild(row);
+        }
+
+        function resetPackingState() {
+            packStep = 'box';
+            currentBox = null;
+            pendingItem = null;
+            currentItemId = null;
+            setHint('Отсканируйте ящик');
+        }
+
+        function handleFindScan(scannedId) {
+            // Игнорируем повторное сканирование того же ID
+            if (currentItemId === scannedId) return;
+            currentItemId = scannedId;
+
+            if (isScanning) {
+                isScanning = false;
+            }
+
+            fetch(`/api/get_item/${scannedId}`, { method: 'GET' })
+                .then(response => response.json())
+                // .then(response => {
+                //     if (!response.ok) {
+                //         return response.json().then(err => {throw err;})
+                //     }
+                //     })
+                .then(item => {
+                    if (item.error) {
+                        throw new Error(item.error);
+                    }
+                    document.querySelector('#item-product').textContent = item.product;
+                    document.querySelector('#item-placement_location').textContent = item.placement_location;
+                    document.querySelector('#item-current_count').textContent = item.current_count;
+                    document.querySelector('#item-available_count').textContent = item.available_count;
+
+                    document.querySelector('#item-info').style.display = 'block';
+                    document.querySelector('#result').innerHTML = '<p class="success">✅ QR-код распознан!</p>';
+                    setHint('Наведите камеру на QR-код...');
+                    
+                })
+                .catch(() => {
+                    document.querySelector('#item-info').style.display = 'none';
+                    document.querySelector('#result').innerHTML = '<p class="error">❌ Предмет не найден.</p>';
+                    isScanning = true;
+                });
+        }
+
+        function handlePackingScan(scannedId) {
+            if (packingFinished) return;
+            // Игнорируем повторное сканирование того же ID
+            console.log("NNN", currentItemId, scannedId)
+            if (currentItemId === scannedId) return;
+            currentItemId = scannedId;
+
+            if (packStep === 'box') {
+                // if (!/^\d+$/.test(scannedId)) {
+                //     document.querySelector('#result').style.display = 'block';
+                //     document.querySelector('#result').innerHTML = '<p class="error">❌ Неверный формат.</p>';
+                //     return;  
+                // }
+                document.querySelector('#result').style.display = 'none';
+                currentBox = scannedId;
+                packStep = 'item';
+                setHint('Отсканируйте предмет');
+                return;
+            }
+
+            if (packStep === 'item') {
+                fetch(`/api/get_item/${scannedId}`, { method: 'GET' })
+                    .then(response => response.json())
+                    .then(item => {
+                        if (item.error) {
+                            throw new Error(item.error);
+                        }
+                        pendingItem = item;
+                        packStep = 'slot';
+                        document.querySelector('#result').style.display = 'none';
+
+                        setHint('Отсканируйте место');
+                        
+                    })
+                    .catch(() => {
+                        document.querySelector('#result').style.display = 'block';
+                        document.querySelector('#result').innerHTML = '<p class="error">❌ Предмет не найден.</p>';
+                        isScanning = true;
+                    });
+                
+                return;
+            }
+
+            if (packStep === 'slot') {
+                if (!/^\d+$/.test(scannedId)) {
+                    document.querySelector('#result').style.display = 'block';
+                    document.querySelector('#result').innerHTML = '<p class="error">❌ Неверный формат.</p>';
+                    return;  // не запоминаем ID и не меняем состояние
+                }
+                document.querySelector('#result').style.display = 'none';
+
+                const location = `${currentBox}-${scannedId}`;
+                const data = {
+                    id: pendingItem.id,
+                    product: pendingItem.product,
+                    placement_location: location,
+                    current_count: pendingItem.current_count,
+                    available_count: pendingItem.available_count,
+                    image: pendingItem.image,
+                    document: pendingItem.document,
+                    analogue: pendingItem.analogue
+                };
+
+                fetch(`/api/add_to_list`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.status === 'success') {
+                        appendRow(result.item);
+                        // currentItemId = null;
+                        pendingItem = null;
+                        packStep = 'item';
+                        setHint('Отсканируйте предмет');
+                        return;
+                    }
+                    document.getElementById('result').innerHTML =
+                        '<p class="error">❌ Ошибка сохранения укладочного листа.</p>';
+                });
+            }
+        }
+
+        const packingUi = document.getElementById('packing-ui');
+        const finishPackingBtn = document.getElementById('finishPackingBtn');
+        const continuePackingBtn = document.getElementById('continuePackingBtn');
+        const restartPackingBtn = document.getElementById('restartPackingBtn');
+        const printPackingBtn = document.getElementById('printPackingBtn');
+        const packingFinishedBox = document.getElementById('packing-finished');
+        const packingControls = document.getElementById('packing-controls');
+
+        let packingFinished = false;
+
+        function updateModeUi() {
+            if (modeToggle.checked) {
+                packingUi.style.display = '';
+                resetPackingState();
+            } else {
+                packingUi.style.display = 'none';
+                setHint('Наведите камеру на QR-код...');
+            }
+            updatePackingActions();
+        }
+
+        function updatePackingActions() {
+            if (!modeToggle.checked) {
+                packingControls.style.display = 'none';
+                packingFinishedBox.style.display = 'none';
+                return;
+            }
+            if (packingFinished) {
+                packingControls.style.display = 'none';
+                packingFinishedBox.style.display = '';
+            } else {
+                packingControls.style.display = '';
+                packingFinishedBox.style.display = 'none';
+            }
+        }
+
+        function loadModeFromStorage() {
+            const saved = localStorage.getItem(MODE_STORAGE_KEY);
+            if (saved !== null) {
+                modeToggle.checked = saved === 'true';
+            }
+        }
+
+        document.getElementById('startScanBtn').addEventListener('click', function() {
+            if (isScanning) return; 
+            // Сбрасываем текущий ID, чтобы можно было сканировать снова
+            currentItemId = null;
+            document.querySelector('#item-info').style.display = 'none';
+            document.getElementById('result').innerHTML = '<p>Наведите камеру на QR-код</p>';
+            isScanning = true;
+
+            if (modeToggle.checked) {
+                resetPackingState();
+            } else {
+                setHint('Наведите камеру на QR-код...');
+            }
+        });
+
+        modeToggle.addEventListener('change', () => {
+            localStorage.setItem(MODE_STORAGE_KEY, modeToggle.checked ? 'true' : 'false');
+            updateModeUi();
+            document.querySelector('#item-info').style.display = 'none';
+            document.getElementById('result').innerHTML = '<p>Наведите камеру на QR-код</p>';
+            isScanning = true;
+            currentItemId = null;
+            document.querySelector('#item-info').style.display = 'none';
+
+            if (modeToggle.checked) {
+                resetPackingState();
+            } else {
+                setHint('Наведите камеру на QR-код...');
+            }
+        });
+
+        loadModeFromStorage();
+        updateModeUi();
+
+        finishPackingBtn.addEventListener('click', () => {
+            packingFinished = true;
+            isScanning = false;
+            setHint('Заполнение завершено');
+            updatePackingActions();
+        });
+
+        continuePackingBtn.addEventListener('click', () => {
+            packingFinished = false;
+            isScanning = true;
+            if (currentBox) {
+                packStep = 'item';
+                setHint('Отсканируйте предмет');
+            } else {
+                resetPackingState();
+            }
+            updatePackingActions();
+        });
+
+        restartPackingBtn.addEventListener('click', () => {
+            fetch('/api/packing/reset', {method: 'POST'})
+            .then(() => {
+                itemsTableBody.innerHTML = '';
+                packingFinished = false;
+                resetPackingState();
+                isScanning = true;
+                updatePackingActions();
+            });
+        });
+
+        printPackingBtn.addEventListener('click', () => {
+            window.open('/packing/print', '_blank');
+        })
+    </script>
+</body>
+</html>

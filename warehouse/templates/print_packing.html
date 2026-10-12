@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Укладочный лист</title>
+    <style>
+        @page{
+            size: A4;
+            margin: 12mm;
+        }
+        body{
+            font-family: sans-serif, Arial;
+        }
+        table{
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td{
+            border: 1px solid black;
+            padding: 5px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <h2>Укладочный лист</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Изделие</th>
+                <th>Место укладки</th>
+                <th>Текущее количество</th>
+                <th>Доступное количество</th>
+                <th>Изображение</th>
+                <th>Вложенный документ</th>
+                <th>Аналог/заменитель</th>
+            </tr>
+        </thead>
+        <tbody>
+            {%for item in items%}
+            <tr>
+                <td>{{item.id}}</td>
+                <td>{{item.product}}</td>
+                <td>{{item.placement_location}}</td>
+                <td>{{item.current_count}}</td>
+                <td>{{item.available_count}}</td>
+                <td>{{item.image}}</td>
+                <td>{{item.document}}</td>
+                <td>{{item.analogue}}</td>
+            </tr>
+            {%endfor%}
+        </tbody>
+    </table>
+    <script>
+        window.print();
+    </script>
+</body>
+</html>
