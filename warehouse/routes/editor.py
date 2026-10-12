@@ -56,6 +56,19 @@ def register(app, background, load_columns, load_items):
             write_store(app, store)
         return jsonify(status='success')
 
+    @app.delete('/api/label-templates/<string:key>')
+    def delete_label_template(key):
+        with STORE_LOCK:
+            store = read_store(app)
+            template = store['templates'].get(key)
+            if template is None:
+                return jsonify(error='Шаблон не найден'), 404
+            del store['templates'][key]
+            if store['active'] == key:
+                store['active'] = None
+            write_store(app, store)
+        return jsonify(status='success', message=f'Шаблон «{template["name"]}» удалён')
+
     @app.get('/api/label-templates/background')
     def label_background():
         return send_file(background(), mimetype='image/png')

@@ -4,6 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Редактор этикеток · Niimbot B31</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='label_editor.css') }}">
+<style>#guides{position:absolute;inset:0;pointer-events:none;z-index:3}.guide{display:none;position:absolute;background:#e83e8c;box-shadow:0 0 0 1px #fff8}.guide.visible{display:block}.guide.vertical{top:0;bottom:0;width:1px}.guide.horizontal{left:0;right:0;height:1px}#objects{z-index:4}.object.snapped{box-shadow:0 0 0 2px #e83e8c33}</style>
 <script defer src="{{ url_for('static', filename='label_editor.js') }}"></script>
 </head>
 <body>
@@ -11,6 +12,7 @@
 <div class="toolbar">
 <label>Шаблоны <select id="templates"><option value="">Новый шаблон</option></select></label>
 <button id="new">+ Новый</button><button id="save" class="primary">Сохранить и использовать</button>
+<button id="delete-template" class="danger" disabled>Удалить шаблон</button>
 <button id="legacy">Вернуть стандартную печать</button>
 </div>
 <p id="active" class="note"></p>
@@ -24,8 +26,8 @@
 </aside>
 <section class="workspace">
 <div class="canvas-tools"><button id="undo" title="Отменить">↶ Отменить</button><button id="redo">↷ Повторить</button><button id="download">Скачать PNG</button></div>
-<div class="paper-wrap"><div id="paper" tabindex="0" aria-label="Макет этикетки"><img id="preview" src="/api/label-templates/background" alt="Предпросмотр этикетки"><div id="safe-area"></div><div id="objects"></div></div></div>
-<p class="note">Размер, рамка, шапка и отступы зафиксированы. Пунктир обозначает область для элементов и не печатается.</p>
+<div class="paper-wrap"><div id="paper" tabindex="0" aria-label="Макет этикетки"><img id="preview" src="/api/label-templates/background" alt="Предпросмотр этикетки"><div id="safe-area"></div><div id="guides"><span id="guide-x" class="guide vertical"></span><span id="guide-y" class="guide horizontal"></span></div><div id="objects"></div></div></div>
+<p class="note">Размер, рамка, шапка и отступы зафиксированы. При перемещении появляются умные направляющие: элемент мягко привязывается к центру этикетки и границам других элементов. Направляющие не печатаются.</p>
 <p class="note">Предпросмотр использует первую строку загруженного Excel, а без файла — пример. QR-код содержит ID предмета. При печати подставляются данные выбранного предмета.</p>
 <p id="status" role="status" aria-live="polite"></p>
 </section>

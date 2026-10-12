@@ -361,3 +361,41 @@ input:checked + .slider:before {
     color: #666;
     background: #fafafa;
 }
+
+.operation-panel {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto;
+    gap: 8px 24px;
+    align-items: center;
+    margin: 18px 0;
+    padding: 16px;
+    border: 1px solid #b9dfc3;
+    border-radius: 12px;
+    background: #f2fbf4;
+}
+.operation-panel.writeoff { border-color: #f1c0c0; background: #fff6f6; }
+.operation-panel p { margin: 5px 0 0; color: #5b6573; }
+.operation-switch { display: flex; gap: 8px; padding: 4px; border-radius: 10px; background: #e3e8ee; }
+.operation-switch label { cursor: pointer; }
+.operation-switch input { position: absolute; opacity: 0; pointer-events: none; }
+.operation-switch span { display: block; padding: 9px 13px; border-radius: 7px; color: #465466; font-weight: 700; }
+.operation-switch input:checked + span { color: white; background: #258044; box-shadow: 0 2px 8px #25804440; }
+.operation-switch input[value="writeoff"]:checked + span { background: #c33d3d; box-shadow: 0 2px 8px #c33d3d40; }
+.operation-help { grid-column: 1 / -1; font-size: 13px; }
+#item-info { margin: 18px 0; padding: 18px; border: 1px solid #dce3eb; border-radius: 12px; box-shadow: 0 5px 20px #20304012; }
+.scan-result-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.scan-result-header h3 { margin: 0; }
+.operation-badge { padding: 7px 11px; border-radius: 999px; color: white; font-size: 13px; font-weight: 700; }
+.operation-badge.receipt { background: #258044; }.operation-badge.writeoff { background: #c33d3d; }
+.row-location { margin: 13px 0; padding: 10px 12px; border-radius: 8px; background: #edf4ff; color: #244c7b; font-weight: 700; }
+.item-details { display: grid; grid-template-columns: minmax(130px, .7fr) minmax(180px, 2fr); margin: 0; }
+.item-details dt, .item-details dd { margin: 0; padding: 8px; border-bottom: 1px solid #edf0f3; overflow-wrap: anywhere; }
+.item-details dt { color: #647184; font-weight: 700; }.item-details dd { color: #202b38; }
+.stock-direction { padding: 12px; border-left: 4px solid #4d79bb; background: #f6f8fb; }
+.toast-region { position: fixed; right: 22px; bottom: 22px; z-index: 2000; display: grid; gap: 10px; width: min(390px, calc(100vw - 44px)); }
+.toast { transform: translateY(12px); opacity: 0; padding: 14px 16px; border-radius: 9px; color: white; background: #258044; box-shadow: 0 8px 28px #15203045; transition: .22s ease; }
+.toast.show { transform: translateY(0); opacity: 1; }.toast.error { background: #b52f39; }.toast.info { background: #2769b0; }
+.button-spinner { display: inline-block; width: 13px; height: 13px; margin-right: 5px; border: 2px solid #ffffff80; border-top-color: white; border-radius: 50%; vertical-align: -2px; animation: spin .7s linear infinite; }
+.printOneBtn.is-loading { cursor: wait; opacity: .8; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 650px) { .operation-panel { grid-template-columns: 1fr; }.operation-help { grid-column: auto; }.operation-switch { width: 100%; }.operation-switch label { flex: 1; text-align: center; }.item-details { grid-template-columns: 1fr; }.item-details dt { padding-bottom: 2px; border-bottom: 0; }.item-details dd { padding-top: 2px; } }

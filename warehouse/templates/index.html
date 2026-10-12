@@ -107,9 +107,19 @@
             </div>
         </div>
     </div>
+    <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+
+            function showToast(message, type = 'success') {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.textContent = message;
+                document.querySelector('#toastRegion').appendChild(toast);
+                requestAnimationFrame(() => toast.classList.add('show'));
+                setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 250); }, 4500);
+            }
 
             const fileInput = document.querySelector('#excelFile');
             const excelMessage = document.querySelector('#excelMessage');
@@ -245,17 +255,26 @@
             document.querySelectorAll('.printOneBtn').forEach(button => {
                 button.addEventListener('click', async function() {
                     const itemId = this.getAttribute('data-id');
-                    // window.location.href = `/api/print_item/${itemId}`;
+                    if (this.disabled) return;
+                    const originalText = this.textContent;
+                    this.disabled = true;
+                    this.classList.add('is-loading');
+                    this.innerHTML = '<span class="button-spinner" aria-hidden="true"></span> Печать…';
+                    showToast(`Этикетка ${itemId}: задание отправлено на принтер`, 'info');
                     try {
                         const response = await fetch(`/api/print_item/${itemId}`);
                         const data = await response.json();
                         if (response.ok) {
-                            alert('✅ Печать выполнена успешно!');
+                            showToast(`Этикетка ${itemId} успешно напечатана`);
                         } else {
-                            alert('❌ Ошибка: ' + (data.error || data.details || 'Неизвестная ошибка'));
+                            showToast(data.error || data.details || 'Неизвестная ошибка печати', 'error');
                         }
                     } catch (err) {
-                        alert('❌ Ошибка соединения: ' + err.message);
+                        showToast('Нет связи с сервером печати: ' + err.message, 'error');
+                    } finally {
+                        this.disabled = false;
+                        this.classList.remove('is-loading');
+                        this.textContent = originalText;
                     }
                 });
             });

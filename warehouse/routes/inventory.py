@@ -56,9 +56,13 @@ def add_item():
 def get_item(item_id):
     """API для получения данных предмета по его ID."""
     items = load_items()
-    for item in items:
+    for index, item in enumerate(items):
         if item['id'] == item_id:
-            return jsonify(item)
+            # Excel row 1 contains column headings, so the first data row is 2.
+            return jsonify(**item, _meta={
+                'excel_row': index + 2,
+                'item_number': index + 1,
+            })
     return (jsonify({'error': 'Item not found'}), 404)
 
 

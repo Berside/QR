@@ -21,6 +21,18 @@
             <span class="mode-label">Сформировать укладочный лист</span>
         </div>
 
+        <section id="operation-panel" class="operation-panel" aria-label="Тип складской операции">
+            <div>
+                <strong>Складская операция</strong>
+                <p>Выберите, что происходит с найденным товаром.</p>
+            </div>
+            <div class="operation-switch" role="radiogroup" aria-label="Операция">
+                <label><input type="radio" name="operation" value="receipt" checked><span>＋ Приёмка</span></label>
+                <label><input type="radio" name="operation" value="writeoff"><span>− Списание</span></label>
+            </div>
+            <p id="operation-help" class="operation-help"></p>
+        </section>
+
         <button id="startScanBtn">Начать сканирование</button>
         <div class="scanner-box">
             <video id="video" autoplay playsinline></video>
@@ -31,11 +43,10 @@
         </div>
 
         <div id="item-info" style="display: none;">
-            <h3>Информация о предмете</h3>
-            <p><strong>Изделие:</strong> <span id="item-product"></span></p>
-            <p><strong>Местоположение:</strong> <span id="item-placement_location"></span></p>
-            <p><strong>Текущее количество:</strong> <span id="item-current_count"></span></p>
-            <p><strong>Доступное количество:</strong> <span id="item-available_count"></span></p>
+            <div class="scan-result-header"><h3>Информация о предмете</h3><span id="operation-result" class="operation-badge"></span></div>
+            <div id="item-row-location" class="row-location"></div>
+            <dl id="item-details" class="item-details"></dl>
+            <p id="stock-direction" class="stock-direction"></p>
         </div>
         <div id="packing-ui">
             <div id="scan-hint" class="hint">Отсканируйте ящик</div>
@@ -101,14 +112,65 @@
         let currentItemId = null;
 
         const MODE_STORAGE_KEY = 'packingMode';
+        const OPERATION_STORAGE_KEY = 'inventoryOperation';
 
         const modeToggle = document.getElementById('modeToggle');
         const hintEl = document.getElementById('scan-hint');
         const itemsTableBody = document.getElementById('itemsTableBody');
+        const operationPanel = document.getElementById('operation-panel');
+        const operationHelp = document.getElementById('operation-help');
+        const operationInputs = [...document.querySelectorAll('input[name="operation"]')];
 
         let packStep = 'box';   // box -> item -> slot
         let currentBox = null;
         let pendingItem = null;
+        let lastFoundItem = null;
+
+        function selectedOperation() {
+            return document.querySelector('input[name="operation"]:checked')?.value || 'receipt';
+        }
+
+        function updateOperationUi() {
+            const receipt = selectedOperation() === 'receipt';
+            operationHelp.textContent = receipt
+                ? 'Количество должно увеличиться. Склад-получатель пока не указан.'
+                : 'Количество должно уменьшиться. Склад-источник пока не указан.';
+            operationPanel.classList.toggle('writeoff', !receipt);
+            if (lastFoundItem && document.getElementById('item-info').style.display !== 'none') {
+                renderFoundItem(lastFoundItem);
+            }
+        }
+
+        function renderFoundItem(item) {
+            lastFoundItem = item;
+            const receipt = selectedOperation() === 'receipt';
+            const badge = document.getElementById('operation-result');
+            badge.textContent = receipt ? 'Приёмка · плюс' : 'Списание · минус';
+            badge.className = `operation-badge ${receipt ? 'receipt' : 'writeoff'}`;
+            document.getElementById('item-row-location').textContent =
+                `Строка Excel: ${item._meta?.excel_row ?? '—'} · Позиция в списке: ${item._meta?.item_number ?? '—'} · ID: ${item.id ?? '—'}`;
+            const details = document.getElementById('item-details');
+            details.replaceChildren();
+            Object.entries(item).filter(([key]) => key !== '_meta').forEach(([key, value]) => {
+                const term = document.createElement('dt');
+                const description = document.createElement('dd');
+                term.textContent = key;
+                description.textContent = value === '' || value == null ? '—' : String(value);
+                details.append(term, description);
+            });
+            document.getElementById('stock-direction').textContent = receipt
+                ? 'Товар найден в базе. Ожидаемое движение: прибавить к остатку; место назначения ещё не определено.'
+                : 'Товар найден в базе. Ожидаемое движение: вычесть из остатка; место списания ещё не определено.';
+        }
+
+        const savedOperation = localStorage.getItem(OPERATION_STORAGE_KEY);
+        const savedOperationInput = operationInputs.find(input => input.value === savedOperation);
+        if (savedOperationInput) savedOperationInput.checked = true;
+        operationInputs.forEach(input => input.addEventListener('change', () => {
+            localStorage.setItem(OPERATION_STORAGE_KEY, selectedOperation());
+            updateOperationUi();
+        }));
+        updateOperationUi();
 
         // Запрашиваем доступ к камере
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
@@ -210,10 +272,7 @@
                     if (item.error) {
                         throw new Error(item.error);
                     }
-                    document.querySelector('#item-product').textContent = item.product;
-                    document.querySelector('#item-placement_location').textContent = item.placement_location;
-                    document.querySelector('#item-current_count').textContent = item.current_count;
-                    document.querySelector('#item-available_count').textContent = item.available_count;
+                    renderFoundItem(item);
 
                     document.querySelector('#item-info').style.display = 'block';
                     document.querySelector('#result').innerHTML = '<p class="success">✅ QR-код распознан!</p>';
@@ -221,6 +280,7 @@
                     
                 })
                 .catch(() => {
+                    currentItemId = null;
                     document.querySelector('#item-info').style.display = 'none';
                     document.querySelector('#result').innerHTML = '<p class="error">❌ Предмет не найден.</p>';
                     isScanning = true;
@@ -324,9 +384,11 @@
         function updateModeUi() {
             if (modeToggle.checked) {
                 packingUi.style.display = '';
+                operationPanel.style.display = 'none';
                 resetPackingState();
             } else {
                 packingUi.style.display = 'none';
+                operationPanel.style.display = '';
                 setHint('Наведите камеру на QR-код...');
             }
             updatePackingActions();

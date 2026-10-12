@@ -36,7 +36,9 @@ class ApplicationTests(unittest.TestCase):
 
     def test_workbook_upload_edit_add_delete_and_download(self):
         self.upload_workbook()
-        self.assertEqual(self.client.get('/api/get_item/001').json['extra'], 'Сохранить')
+        found = self.client.get('/api/get_item/001').json
+        self.assertEqual(found['extra'], 'Сохранить')
+        self.assertEqual(found['_meta'], {'excel_row': 2, 'item_number': 1})
         response = self.client.put('/api/edit_item/001', json={
             'values': {'product': 'Гайка', 'id': 'changed'},
         })

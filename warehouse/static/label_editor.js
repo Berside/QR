@@ -3,6 +3,7 @@ const $ = id => document.getElementById(id);
 const names = {text:'Текст', field:'Поле Excel', qr:'QR-код', image:'Изображение', line:'Линия'};
 let data, model = {name:'Новый шаблон', elements:[]}, currentId = null, selected = -1;
 let history = [], future = [], dirty = false, timer, version = 0, previewUrl;
+let activeGuides = {x:null, y:null};
 const copy = value => JSON.parse(JSON.stringify(value));
 function status(message, error = false) { $('status').textContent = message; $('status').classList.toggle('error', error); }
 async function api(url, body) {
@@ -20,11 +21,42 @@ function bound(el, changed) {
   el.y = Math.max(b.y, Math.min(b.y + b.height - el.height, Math.round(el.y) || b.y));
 }
 function position(node, el) { Object.assign(node.style, {left:`${el.x / data.width * 100}%`, top:`${el.y / data.height * 100}%`, width:`${el.width / data.width * 100}%`, height:`${el.height / data.height * 100}%`}); }
+function updateGuides() {
+  [['x','guide-x','left'], ['y','guide-y','top']].forEach(([axis,id,side]) => {
+    const node = $(id), value = activeGuides[axis];
+    node.classList.toggle('visible', value !== null);
+    if (value !== null) node.style[side] = `${value / data[axis === 'x' ? 'width' : 'height'] * 100}%`;
+  });
+}
+function smartAlign(el, index) {
+  const threshold = 4, b = data.body;
+  const targets = {
+    x:[b.x + b.width / 2],
+    y:[b.y + b.height / 2],
+  };
+  model.elements.forEach((other, i) => {
+    if (i === index) return;
+    targets.x.push(other.x, other.x + other.width / 2, other.x + other.width);
+    targets.y.push(other.y, other.y + other.height / 2, other.y + other.height);
+  });
+  activeGuides = {x:null, y:null};
+  for (const axis of ['x','y']) {
+    const size = axis === 'x' ? el.width : el.height;
+    const anchors = [0, size / 2, size];
+    let best = null;
+    for (const target of targets[axis]) for (const anchor of anchors) {
+      const delta = target - (el[axis] + anchor);
+      if (Math.abs(delta) <= threshold && (!best || Math.abs(delta) < Math.abs(best.delta))) best = {delta,target};
+    }
+    if (best) { el[axis] = Math.round(el[axis] + best.delta); activeGuides[axis] = best.target; }
+  }
+  bound(el);
+}
 function draw() {
   $('name').value = model.name;
   $('objects').replaceChildren(); $('layers').replaceChildren();
   model.elements.forEach((el, i) => {
-    const node = document.createElement('div'); node.className = 'object' + (i === selected ? ' selected' : ''); position(node, el);
+    const node = document.createElement('div'); node.className = 'object' + (i === selected ? ' selected' : '') + (i === selected && (activeGuides.x !== null || activeGuides.y !== null) ? ' snapped' : ''); position(node, el);
     node.title = names[el.type]; node.dataset.index = i;
     if (i === selected) { const handle = document.createElement('span'); handle.className = 'handle'; node.append(handle); }
     node.addEventListener('pointerdown', event => startDrag(event, i)); $('objects').append(node);
@@ -39,6 +71,8 @@ function draw() {
     document.querySelectorAll('[data-kind]').forEach(node => { node.hidden = !node.dataset.kind.split(' ').includes(el.type); });
   }
   $('undo').disabled = !history.length; $('redo').disabled = !future.length;
+  $('delete-template').disabled = !currentId;
+  updateGuides();
 }
 function refresh() { draw(); version++; clearTimeout(timer); timer = setTimeout(preview, 220); }
 async function preview() {
@@ -60,10 +94,11 @@ function startDrag(event, index) {
   const move = e => {
     const dx = Math.round((e.clientX - start.x) * data.width / rect.width), dy = Math.round((e.clientY - start.y) * data.height / rect.height);
     const el = model.elements[index]; Object.assign(el, original);
-    if (resizing) { el.width += dx; el.height += dy; } else { el.x += dx; el.y += dy; }
-    bound(el); refresh();
+    if (resizing) { el.width += dx; el.height += dy; bound(el); activeGuides = {x:null,y:null}; }
+    else { el.x += dx; el.y += dy; bound(el); smartAlign(el, index); }
+    refresh();
   };
-  const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); refresh(); };
+  const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); activeGuides = {x:null,y:null}; refresh(); };
   window.addEventListener('pointermove', move); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
 }
 function add(type, src) {
@@ -99,9 +134,21 @@ $('up').onclick = () => reorder(true); $('down').onclick = () => reorder(false);
 $('undo').onclick = () => { if (!history.length) return; future.push(copy(model)); model = history.pop(); selected = -1; dirty = true; refresh(); };
 $('redo').onclick = () => { if (!future.length) return; history.push(copy(model)); model = future.pop(); selected = -1; dirty = true; refresh(); };
 function canLeave() { return !dirty || window.confirm('Несохранённые изменения будут потеряны. Продолжить?'); }
-function openTemplate(id) { currentId = id || null; model = id ? copy(data.templates[id]) : {name:'Новый шаблон',elements:[]}; history = []; future = []; selected = -1; dirty = false; $('templates').value = id || ''; refresh(); }
+function openTemplate(id) { currentId = id || null; model = id ? copy(data.templates[id]) : {name:'Новый шаблон',elements:[]}; history = []; future = []; selected = -1; dirty = false; activeGuides = {x:null,y:null}; $('templates').value = id || ''; refresh(); }
 $('new').onclick = () => { if (canLeave()) openTemplate(null); };
 $('templates').onchange = () => { if (canLeave()) openTemplate($('templates').value); else $('templates').value = currentId || ''; };
+$('delete-template').onclick = async () => {
+  if (!currentId) return;
+  const templateName = data.templates[currentId]?.name || model.name;
+  if (!window.confirm(`Удалить шаблон «${templateName}»? Это действие нельзя отменить.`)) return;
+  $('delete-template').disabled = true;
+  try {
+    const response = await fetch(`/api/label-templates/${encodeURIComponent(currentId)}`, {method:'DELETE'});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Не удалось удалить шаблон');
+    currentId = null; await reload(); openTemplate(null); status(result.message);
+  } catch (error) { status(error.message, true); draw(); }
+};
 async function reload() {
   data = await (await api('/api/label-templates')).json();
   $('templates').replaceChildren(new Option('Новый шаблон', ''));

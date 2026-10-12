@@ -70,6 +70,15 @@ class LabelEditorTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/label-templates/active', json={'id':None}).status_code, 200)
         self.assertIsNone(self.client.get('/api/label-templates').json['active'])
 
+    def test_delete_template_removes_it_and_resets_active_template(self):
+        key = self.client.post('/api/label-templates', json=self.template()).json['id']
+        response = self.client.delete('/api/label-templates/' + key)
+        self.assertEqual(response.status_code, 200)
+        store = self.client.get('/api/label-templates').json
+        self.assertNotIn(key, store['templates'])
+        self.assertIsNone(store['active'])
+        self.assertEqual(self.client.delete('/api/label-templates/' + key).status_code, 404)
+
     def test_custom_artwork_reaches_printer_without_changing_settings(self):
         from warehouse.vendor.niimprintx.cli.command import niimbot_cli
         self.client.post('/api/label-templates', json=self.template())
