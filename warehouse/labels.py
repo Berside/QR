@@ -11,7 +11,11 @@ from PIL import Image, ImageDraw
 from .label_editor import active_template, font as label_font, render as render_label
 
 # Excel field names and their order on the default label.
-LABEL_COLUMNS = ['product', 'ШИБФ', 'available_count']
+LABEL_COLUMNS = [
+    ('product', 'Наименование'),
+    ('ШИБФ',),
+    ('available_count', 'Доступное кол-во'),
+]
 
 
 def generate_qr_image(data):
@@ -122,39 +126,76 @@ def generate_default_label(data, item, columns=None, header_only=False):
     text_bottom = body_bottom
     text_height = text_bottom - text_top
     available_columns = columns if columns is not None else item.keys()
-    label_columns = [column for column in LABEL_COLUMNS if column in available_columns]
+    # label_columns = [column for column in LABEL_COLUMNS if column in available_columns]
+    # Выбираем ровно один существующий столбец из каждой группы.
+    label_columns = [
+        next((name for name in variants if name in available_columns), None)
+        for variants in LABEL_COLUMNS
+    ]
+    label_columns = [name for name in label_columns if name]
 
     def wrap_text_by_pixels(value, font, max_width):
-        words = value.split()
-        if not words:
-            return ['']
+        # words = value.split()
+        # if not words:
+        #     return ['']
         lines = []
         current = ''
-        for word in words:
+        for word in value.split():
             test = word if not current else current + ' ' + word
             bbox = draw.textbbox((0, 0), test, font=font)
             width = bbox[2] - bbox[0]
-            if width <= max_width:
+            # if width <= max_width:
+            if bbox[2] - bbox[0] <= max_width:
                 current = test
-            else:
-                if current:
-                    lines.append(current)
+                continue
+            if current:
+                lines.append(current)
                 current = ''
-                part = ''
-                for char in word:
-                    test_part = part + char
-                    bbox = draw.textbbox((0, 0), test_part, font=font)
-                    part_width = bbox[2] - bbox[0]
-                    if part_width <= max_width:
-                        part = test_part
-                    else:
-                        if part:
-                            lines.append(part)
-                        part = char
-                current = part
+
+            bbox = draw.textbbox((0, 0), word, font=font)
+            if bbox[2] - bbox[0] <= max_width:
+                current = word
+                continue
+            
+            # Только очень длинные слова делим по буквам.
+            for char in word:
+                test = current + char
+                bbox = draw.textbbox((0, 0), test, font=font)
+                if current and bbox[2] - bbox[0] > max_width:
+                    lines.append(current)
+                    current = char
+                else:
+                    current = test
+                # part = ''
+                # for char in word:
+                #     test_part = part + char
+                #     bbox = draw.textbbox((0, 0), test_part, font=font)
+                #     part_width = bbox[2] - bbox[0]
+                #     if part_width <= max_width:
+                #         part = test_part
+                #     else:
+                #         if part:
+                #             lines.append(part)
+                #         part = char
+                # current = part
         if current:
             lines.append(current)
         return lines or ['']
+
+    # def build_lines(font):
+    #     lines = []
+    #     for column in label_columns:
+    #         value = str(item.get(column, '')).strip()
+    #         if not value:
+    #             continue
+    #         label = f'{column}:'
+    #         label_bbox = draw.textbbox((0, 0), label, font=font)
+    #         label_width = label_bbox[2] - label_bbox[0]
+    #         value_width = max(1, text_width - label_width - field_gap)
+    #         value_lines = wrap_text_by_pixels(value, font, value_width)
+    #         lines.append((label, value_lines[0]))
+    #         lines.extend((('', line) for line in value_lines[1:]))
+    #     return lines
 
     def build_lines(font):
         lines = []
@@ -165,16 +206,37 @@ def generate_default_label(data, item, columns=None, header_only=False):
             label = f'{column}:'
             label_bbox = draw.textbbox((0, 0), label, font=font)
             label_width = label_bbox[2] - label_bbox[0]
-            value_width = max(1, text_width - label_width - field_gap)
-            value_lines = wrap_text_by_pixels(value, font, value_width)
-            lines.append((label, value_lines[0]))
-            lines.extend((('', line) for line in value_lines[1:]))
+
+            # Только первая строка делит место с подписью поля.
+            first_width = max(0, text_width - label_width - field_gap)
+            words = value.split()
+            first_value = ''
+            while words:
+                test = words[0] if not first_value else first_value + ' ' + words[0]
+                bbox = draw.textbbox((0, 0), test, font=font)
+                if bbox[2] - bbox[0] > first_width:
+                    break
+                first_value = test
+                words.pop(0)
+
+            lines.append((label, first_value))
+
+            # На продолжении доступна ВСЯ ширина, а не остаток после подписи.
+            if words:
+                lines.extend(('', text) for text in wrap_text_by_pixels(
+                    ' '.join(words), font, text_width
+                ))
         return lines
+
     selected_font = None
     selected_lines = None
     for font_size in range(TEXT_FONT_SIZE, MIN_TEXT_FONT_SIZE - 1, -1):
         test_font = label_font(font_size)
         test_lines = build_lines(test_font)
+        # Подписи тоже должны помещаться слева от QR.
+        if any(draw.textbbox((0, 0), label, font=test_font)[2] > text_width
+               for label, _ in test_lines if label):
+            continue
         total_height = 0
         for label, value in test_lines:
             bbox = draw.textbbox((0, 0), 'Ag', font=test_font)

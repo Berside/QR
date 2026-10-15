@@ -48,52 +48,11 @@
         </div>
         </div>
 
-        <!-- Сканер перенесён из scan.html (показывается кнопкой «Сканировать») -->
-        <!-- <section id="scanPanel" class="scanner-card card" style="display: none;">
-            <div class="scanner-view">
-                <button id="startScanBtn"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 8h8v8H8z"/></svg>Начать сканирование</button>
-                <div class="scanner-box">
-                    <video id="video" autoplay playsinline></video>
-                    <canvas id="canvas" style="display: none;"></canvas>
-                </div>
-            </div>
-            <aside class="scan-side">
-                <div class="scan-help"><strong>Как сканировать</strong><br>Расположите QR-код внутри голубой рамки и держите камеру неподвижно.</div>
-                <div id="result"><p>Наведите камеру на QR-код...</p></div>
-            </aside>
-        </section> -->
         <section id="scanPanel" class="scan-status" style="display: none;" aria-live="polite">
-            <strong id="scanModeLabel">QR-сканер</strong>
-            <div id="scan-hint" class="hint" style="display: none;">Отсканируйте ящик</div>
+            <strong>QR-сканер</strong>
             <div id="result"><p>Наведите камеру на QR-код...</p></div>
-            <!-- <button type="button" id="startScanBtn" style="display: none;">Сканировать ещё</button> -->
             <video id="video" autoplay playsinline muted></video>
             <canvas id="canvas" style="display: none;"></canvas>
-        </section>
-
-        <!-- Исходные действия и таблица укладочного листа из scan.html -->
-        <section id="packing-ui" class="items-list" style="display: none;">
-            <h2>Укладочный лист</h2>
-            <div id="packing-controls">
-                <button id="finishPackingBtn">Закончить заполнение</button>
-            </div>
-            <div id="packing-finished" style="display: none;">
-                <button id="continuePackingBtn">Продолжить</button>
-                <button id="restartPackingBtn" class="muted-button">Начать заново</button>
-                <button id="printPackingBtn" class="primary">Печать</button>
-            </div>
-            <div class="table-shell">
-                <table id="packingTable">
-                    <thead>
-                        <tr>
-                            <th>ID</th><th>Изделие</th><th>Место укладки</th>
-                            <th>Текущее количество</th><th>Доступное количество</th>
-                            <th>Изображение</th><th>Вложенный документ</th><th>Аналог/заменитель</th>
-                        </tr>
-                    </thead>
-                    <tbody id="packingTableBody"></tbody>
-                </table>
-            </div>
         </section>
 
         <div class="add-item-form">
@@ -273,33 +232,6 @@
                 }
             });
 
-            // documentInput.addEventListener('change', () => {
-            //     if (documentInput.files && documentInput.files.length) {
-            //         const count = documentInput.files.length;
-
-            //         const allowed = [
-            //             'application/pdf',
-            //             'application/msword',
-            //             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            //             'application/vnd.ms-excel',
-            //             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            //         ];
-            //         const isValid = [...documentInput.files].every(f => allowed.includes(f.type));
-
-            //         if (isValid) {
-            //             documentHint.textContent = count === 1
-            //                 ? `Выбрано: ${documentInput.files[0].name}`
-            //                 : `Выбрано: ${count} файла(ов)`;
-            //             }
-            //             else{
-            //                 alert('Поддерживаются только документы в формате PDF, DOC, DOCX, XLS, XLSX');
-            //             }
-            //         } 
-            //     else {
-            //         documentHint.textContent = documentHintDefault;
-            //     }
-            // });
-
             document.querySelector('#addItemBtn')?.addEventListener('click', function() {
                 const imageInput = document.querySelector('#itemImage');
                 const formData = new FormData();
@@ -371,34 +303,13 @@
 
             document.querySelector('#allQrBtn').addEventListener('click', function(){
                 window.location.href = `/print_labels`;
-            })
+            });
 
-            // document.querySelector('#scan').addEventListener('click', function(){
-            //     document.getElementById('scanPanel').style.display = '';
-            //     startCamera(); // Вместо перехода /scan включаем камеру здесь
-            // })
-            // document.querySelector('#scan').addEventListener('click', function(){
-            //     const panel = document.getElementById('scanPanel');
-
-            //     // Повторное нажатие выключает камеру и убирает подсказку
-            //     if (panel.style.display !== 'none') {
-            //         stopCamera();
-            //         return;
-            //     }
-
-            //     // Показываем компактную подсказку, а саму камеру не показываем
-            //     panel.style.display = 'flex';
-            //     document.getElementById('scanButtonText').textContent = 'Остановить';
-            //     document.getElementById('result').innerHTML = '<p>Наведите камеру на QR-код...</p>';
-            //     document.getElementById('startScanBtn').style.display = 'none';
-            //     currentItemId = null;
-            //     isScanning = true;
-            //     startCamera(); // Прежнее сканирование из scan.html
-            // })
-
-            // Обычный поиск и укладочный лист включаются разными кнопками.
-            document.getElementById('scan').addEventListener('click', () => openScanner(false));
-            document.getElementById('packingModeBtn').addEventListener('click', () => openScanner(true));
+            // Поиск остаётся на главной, укладка открывает старую страницу /scan.
+            document.getElementById('scan').addEventListener('click', openScanner);
+            document.getElementById('packingModeBtn').addEventListener('click', () => {
+                window.location.href = '/scan';
+            });
         });
 
         const inputs = document.querySelectorAll('.form-input');
@@ -503,7 +414,6 @@
                         const cell = row.querySelector(`[data-column="${CSS.escape(column)}"]`);
                         if (cell) cell.textContent = value;
                     });
-                    // window.location.reload();
                 } else {
                     showToast(data.error || 'Не удалось сохранить изменения', 'error');
                 }
@@ -543,11 +453,6 @@
             });
         });
 
-        // Показать уведомление об изменениях при перезагрузке страницы после изменений
-        // window.addEventListener('load', function() {
-        //     // Можно проверить localStorage если нужно сохранять состояние
-        // });
-
         // ===== Сканирование: из scan.html =====
         const video = document.getElementById('video');
         const canvasElement = document.getElementById('canvas');
@@ -556,49 +461,30 @@
         let scanRequestId = null;
         let currentItemId = null;
         let cameraStream = null;
-        let packingMode = false;
         let lastQrData = null;
         let lastAcceptedQr = null;
         let lastScanTime = 0;
         let cameraRequestId = 0;
-        const hintEl = document.getElementById('scan-hint');
-        const packingUi = document.getElementById('packing-ui');
-        const packingTableBody = document.getElementById('packingTableBody');
-        const packingControls = document.getElementById('packing-controls');
-        const packingFinishedBox = document.getElementById('packing-finished');
-        let packingFinished = false;
-        let packStep = 'box';
-        let currentBox = null;
-        let pendingItem = null;
 
-        // Общая камера, два режима. Повторное нажатие кнопки выключает режим.
-        function openScanner(mode) {
+        function openScanner() {
             const panel = document.getElementById('scanPanel');
-            if (panel.style.display !== 'none' && packingMode === mode) {
+            if (panel.style.display !== 'none') {
                 stopCamera();
                 return;
             }
-            stopCamera();
-            packingMode = mode;
+
+            // Подсказку показываем, видео оставляем скрытым.
             panel.style.display = 'flex';
-            document.getElementById('scanModeLabel').textContent =
-                mode ? 'Укладочный лист' : 'QR-сканер';
-            document.getElementById('scanButtonText').textContent = mode ? 'Сканировать' : 'Остановить';
-            document.getElementById('packingButtonText').textContent = mode ? 'Остановить укладку' : 'Сформировать укладочный лист';
-            hintEl.style.display = mode ? '' : 'none';
-            packingUi.style.display = mode ? '' : 'none';
-            document.getElementById('result').style.display = mode ? 'none' : '';
+            document.getElementById('scanButtonText').textContent = 'Остановить';
             document.getElementById('result').innerHTML = '<p>Наведите камеру на QR-код...</p>';
-            isScanning = mode ? !packingFinished : true;
-            if (mode) {
-                if (!packingFinished) resetPackingState();
-                else setHint('Заполнение завершено');
-                updatePackingActions();
-            }
+            currentItemId = null;
+            lastQrData = null;
+            lastAcceptedQr = null;
+            isScanning = true;
             startCamera();
         }
 
-        // Исходное подключение камеры, теперь по кнопке на главной.
+        // Исходное подключение камеры по кнопке на главной.
         function startCamera() {
             if (cameraStream) return; // Повторно камеру не открываем
             const requestId = ++cameraRequestId;
@@ -617,7 +503,6 @@
                 })
                 .catch(err => {
                     console.error("Ошибка доступа к камере:", err);
-                    document.getElementById('result').style.display = '';
                     document.getElementById('result').innerHTML =
                         '<p class="error">Нет доступа к камере. Пожалуйста, разрешите доступ.</p>';
                 });
@@ -625,6 +510,7 @@
 
         // Выключаем камеру и скрываем подсказку при повторном нажатии.
         function stopCamera() {
+            cameraRequestId++;
             if (scanRequestId) cancelAnimationFrame(scanRequestId);
             scanRequestId = null;
             if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
@@ -632,10 +518,7 @@
             video.srcObject = null;
             document.getElementById('scanPanel').style.display = 'none';
             document.getElementById('scanButtonText').textContent = 'Сканировать';
-            document.getElementById('packingButtonText').textContent = 'Сформировать укладочный лист';
-            packingUi.style.display = 'none';
             currentItemId = null;
-            lastQrData = null;
             lastAcceptedQr = null;
             isScanning = false;
         }
@@ -657,13 +540,11 @@
                         lastQrData = qr.data;
                         lastAcceptedQr = qr.data;
                         lastScanTime = Date.now();
-                        if (packingMode) handlePackingScan(qr.data);
-                        else handleFindScan(qr.data);
+                        handleFindScan(qr.data);
                     }
                 } else {
                     // Убрали QR из кадра — разрешаем снова прочитать такой же код.
                     lastQrData = null;
-                    currentItemId = null;
                 }
             }
 
@@ -708,196 +589,14 @@
                     // Было: ожидание кнопки «Сканировать ещё».
                     // Теперь автоматически продолжаем распознавание.
                     currentItemId = null;
-                    if (!packingMode && cameraStream) isScanning = true;
+                    if (cameraStream) isScanning = true;
                 });
         }
 
         function setHint(text) {
             hintEl.textContent = text;
         }
-
-        // Исходная таблица укладочного листа, отдельная от таблицы товаров.
-        function appendRow(item) {
-            const row = document.createElement('tr');
-            ['id', 'product', 'placement_location', 'current_count', 'available_count'].forEach(field => {
-                const cell = document.createElement('td');
-                cell.textContent = item[field] ?? '';
-                row.appendChild(cell);
-            });
-
-            const imageCell = document.createElement('td');
-            imageCell.className = 'image-cell';
-            const imageNameSpan = document.createElement('span');
-            imageNameSpan.className = 'image-name';
-            imageNameSpan.textContent = item.image ? 'Картинка' : '—';
-            imageCell.appendChild(imageNameSpan);
-            if (item.image) {
-                const previewDiv = document.createElement('div');
-                previewDiv.className = 'image-preview';
-                const img = document.createElement('img');
-                img.src = item.image;
-                img.alt = 'Предпросмотр';
-                previewDiv.appendChild(img);
-                imageCell.appendChild(previewDiv);
-            }
-            row.appendChild(imageCell);
-
-            ['document', 'analogue'].forEach(field => {
-                const cell = document.createElement('td');
-                cell.textContent = item[field] ?? '';
-                row.appendChild(cell);
-            });
-            packingTableBody.appendChild(row); // Не добавляем в основную таблицу
-        }
-
-        function resetPackingState() {
-            packStep = 'box';
-            currentBox = null;
-            pendingItem = null;
-            currentItemId = null;
-            setHint('Отсканируйте ящик');
-        }
-
-        function handlePackingScan(scannedId) {
-            if (packingFinished) return;
-            if (currentItemId === scannedId) return;
-            currentItemId = scannedId;
-
-            if (packStep === 'box') {
-                document.querySelector('#result').style.display = 'none';
-                currentBox = scannedId;
-                packStep = 'item';
-                setHint('Отсканируйте предмет');
-                return;
-            }
-
-            if (packStep === 'item') {
-                isScanning = false; // Ждём ответ сервера, чтобы не принять два предмета подряд
-                fetch(`/api/get_item/${scannedId}`, { method: 'GET' })
-                    .then(response => response.json())
-                    .then(item => {
-                        if (item.error) throw new Error(item.error);
-                        pendingItem = item;
-                        packStep = 'slot';
-                        document.querySelector('#result').style.display = 'none';
-                        setHint('Отсканируйте место');
-                    })
-                    .catch(() => {
-                        document.querySelector('#result').style.display = 'block';
-                        document.querySelector('#result').innerHTML = '<p class="error">❌ Предмет не найден.</p>';
-                    })
-                    .finally(() => { if (packingMode && cameraStream && !packingFinished) isScanning = true; });
-                return;
-            }
-
-            if (packStep === 'slot') {
-                if (!/^\d+$/.test(scannedId)) {
-                    document.querySelector('#result').style.display = 'block';
-                    document.querySelector('#result').innerHTML = '<p class="error">❌ Неверный формат.</p>';
-                    return;
-                }
-                document.querySelector('#result').style.display = 'none';
-                isScanning = false;
-                const location = `${currentBox}-${scannedId}`;
-                // Поля запроса исходные. Поддерживаем также русские названия в Excel.
-                const data = {
-                    id: pendingItem.id,
-                    product: pendingItem.product ?? pendingItem['Наименование'],
-                    placement_location: location,
-                    current_count: pendingItem.current_count ?? pendingItem['Текущее кол-во'],
-                    available_count: pendingItem.available_count ?? pendingItem['Доступное кол-во'],
-                    image: pendingItem.image ?? pendingItem['Изображение'],
-                    document: pendingItem.document ?? pendingItem['Вложенный документ'],
-                    analogue: pendingItem.analogue ?? pendingItem['Аналог/заменитель']
-                };
-
-                fetch(`/api/add_to_list`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data),
-                })
-                .then(response => response.json())
-                .then(result => {
-                    if (result.status === 'success') {
-                        appendRow(result.item);
-                        pendingItem = null;
-                        packStep = 'item';
-                        setHint('Отсканируйте предмет');
-                        return;
-                    }
-                    document.getElementById('result').style.display = '';
-                    document.getElementById('result').innerHTML =
-                        '<p class="error">❌ Ошибка сохранения укладочного листа.</p>';
-                })
-                .catch(() => {
-                    document.getElementById('result').style.display = '';
-                    document.getElementById('result').innerHTML =
-                        '<p class="error">❌ Ошибка сохранения укладочного листа.</p>';
-                })
-                .finally(() => { if (packingMode && cameraStream && !packingFinished) isScanning = true; });
-            }
-        }
-
-        // Кнопки укладочного листа из scan.html.
-        function updatePackingActions() {
-            if (packingFinished) {
-                packingControls.style.display = 'none';
-                packingFinishedBox.style.display = '';
-            } else {
-                packingControls.style.display = '';
-                packingFinishedBox.style.display = 'none';
-            }
-        }
-
-
-        // Как и в scan.html: кнопка разрешает сканировать следующий предмет.
-        // document.getElementById('startScanBtn').addEventListener('click', function() {
-        //     if (isScanning) return;
-        //     // Сбрасываем текущий ID, чтобы можно было сканировать снова
-        //     currentItemId = null;
-        //     document.getElementById('result').innerHTML = '<p>Наведите камеру на QR-код</p>';
-        //     this.style.display = 'none'; // Прячем до следующего успешного сканирования
-        //     isScanning = true;
-        // });
-        document.getElementById('finishPackingBtn').addEventListener('click', () => {
-            packingFinished = true;
-            isScanning = false;
-            setHint('Заполнение завершено');
-            updatePackingActions();
-        });
-
-        document.getElementById('continuePackingBtn').addEventListener('click', () => {
-            packingFinished = false;
-            isScanning = true;
-            if (currentBox) {
-                packStep = 'item';
-                setHint('Отсканируйте предмет');
-            } else {
-                resetPackingState();
-            }
-            updatePackingActions();
-        });
-
-        document.getElementById('restartPackingBtn').addEventListener('click', () => {
-            fetch('/api/packing/reset', {method: 'POST'})
-            .then(() => {
-                packingTableBody.innerHTML = '';
-                packingFinished = false;
-                resetPackingState();
-                isScanning = true;
-                updatePackingActions();
-            });
-        });
-
-        document.getElementById('printPackingBtn').addEventListener('click', () => {
-            window.open('/packing/print', '_blank');
-        });
-
-        // // Освобождаем камеру, когда пользователь уходит с главной страницы.
-        // window.addEventListener('pagehide', function() {
-        //     if (scanRequestId) cancelAnimationFrame(scanRequestId);
-        //     if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
-        // });
+        // Освобождаем камеру, когда пользователь уходит с главной страницы.
         window.addEventListener('pagehide', stopCamera);
     </script>
 </body>

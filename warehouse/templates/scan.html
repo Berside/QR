@@ -3,60 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Сканирование QR-кода</title>
+    <title>Формирование укладочного листа</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}">
     <script src="{{ url_for('static', filename='jsQR.js') }}"></script>
+    <style>
+        /* Компактная строка сканирования, как на главной странице */
+        .scan-status {
+            position: sticky;
+            top: 8px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            background: #edf6ff;
+            border: 1px solid #b9d8f5;
+            border-radius: 8px;
+        }
+        .scan-status #result { flex: 1; min-width: 190px; }
+        .scan-status #result p, .scan-status #scan-hint { margin: 0; }
+
+        /* Видео используется для чтения QR, но на экране не показывается */
+        #video { position: absolute; left: -9999px; width: 320px; height: 240px; }
+    </style>
 </head>
 <body>
     <main class="container app-main">
-        <div class="page-heading"><div><div class="eyebrow">Камера и QR-коды</div><h1>Сканирование</h1><p>Найдите предмет или последовательно сформируйте укладочный лист.</p></div><nav class="qr-buttons page-nav" aria-label="Навигация"><a href="/"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 10h16M9 10v9"/></svg>Товары</a><a href="/label-editor"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg>Редактор</a><a href="/print_labels"><svg class="icon" viewBox="0 0 24 24"><path d="M5 3h5v5H5zM14 3h5v5h-5zM5 16h5v5H5zM15 15h2v2h-2zM18 18h2v2h-2z"/></svg>Все QR</a></nav></div>
+        <div class="page-heading"><div><div class="eyebrow">Камера и QR-коды</div><h1>Укладочный лист</h1><p>Последовательно сканируйте ящик, предмет и место укладки.</p></div><nav class="qr-buttons page-nav" aria-label="Навигация"><a href="/"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 10h16M9 10v9"/></svg>Товары</a><a href="/label-editor"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg>Редактор</a><a href="/print_labels"><svg class="icon" viewBox="0 0 24 24"><path d="M5 3h5v5H5zM14 3h5v5h-5zM5 16h5v5H5zM15 15h2v2h-2zM18 18h2v2h-2z"/></svg>Все QR</a></nav></div>
 
-        <div class="mode-switch-container">
-            <span class="mode-label">Найти по QR</span>
-  
-            <label class="switch">
-            <input type="checkbox" id="modeToggle">
-            <span class="slider"></span>
-            </label>
-  
-            <span class="mode-label">Сформировать укладочный лист</span>
-        </div>
-
-        <section id="operation-panel" class="operation-panel" aria-label="Тип складской операции">
-            <div>
-                <strong>Складская операция</strong>
-                <p>Выберите, что происходит с найденным товаром.</p>
-            </div>
-            <div class="operation-switch" role="radiogroup" aria-label="Операция">
-                <label><input type="radio" name="operation" value="receipt" checked><span>＋ Приёмка</span></label>
-                <label><input type="radio" name="operation" value="writeoff"><span>− Списание</span></label>
-            </div>
-            <p id="operation-help" class="operation-help"></p>
-        </section>
-
-        <section class="scanner-card card">
-            <div class="scanner-view">
-                <button id="startScanBtn"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 8h8v8H8z"/></svg>Начать сканирование</button>
-                <div class="scanner-box">
-                    <video id="video" autoplay playsinline></video>
-                    <canvas id="canvas" style="display: none;"></canvas>
-                </div>
-            </div>
-            <aside class="scan-side">
-                <div class="scan-help"><strong>Как сканировать</strong><br>Расположите QR-код внутри голубой рамки и держите камеру неподвижно.</div>
-                <div id="result"><p>Наведите камеру на QR-код...</p></div>
-            </aside>
-        </section>
-
-        <div id="item-info" style="display: none;">
-            <div class="scan-result-header"><h3>Информация о предмете</h3><span id="operation-result" class="operation-badge"></span></div>
-            <div id="item-row-location" class="row-location"></div>
-            <dl id="item-details" class="item-details"></dl>
-            <p id="stock-direction" class="stock-direction"></p>
-        </div>
-        <div id="packing-ui">
+        <!-- Та же компактная панель, что на index.html.
+             На этой странице камера включается сразу, поэтому панель не скрываем. -->
+        <section id="scanPanel" class="scan-status" aria-live="polite">
+            <strong>QR-сканер</strong>
+            <!-- Подсказка для этапов «ящик -> предмет -> место» -->
             <div id="scan-hint" class="hint">Отсканируйте ящик</div>
+            <!-- Показываем здесь сообщения об ошибках -->
+            <div id="result" style="display: none;"><p>Наведите камеру на QR-код...</p></div>
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+        </section>
+
+        <div id="packing-ui">
             <div id="packing-controls">
                 <button id="finishPackingBtn">Закончить заполнение</button>
             </div>
@@ -72,7 +62,7 @@
                 <thead>
                     <tr>
                         <th>ID</th>
-                        <th>Изделие</th>
+                        <th>Наименование</th>
                         <th>Место укладки</th>
                         <th>Текущее количество</th>
                         <th>Доступное количество</th>
@@ -116,101 +106,77 @@
         const video = document.getElementById('video');
         const canvasElement = document.getElementById('canvas');
         const canvas = canvasElement.getContext('2d');
-        let isScanning = true;      
-        let scanRequestId = null; 
-        let currentItemId = null;
-
-        const MODE_STORAGE_KEY = 'packingMode';
-        const OPERATION_STORAGE_KEY = 'inventoryOperation';
-
-        const modeToggle = document.getElementById('modeToggle');
         const hintEl = document.getElementById('scan-hint');
         const itemsTableBody = document.getElementById('itemsTableBody');
-        const operationPanel = document.getElementById('operation-panel');
-        const operationHelp = document.getElementById('operation-help');
-        const operationInputs = [...document.querySelectorAll('input[name="operation"]')];
-
-        let packStep = 'box';   // box -> item -> slot
+        let isScanning = true;
+        let scanRequestId = null;
+        let currentItemId = null;
+        let lastScannedQr = null; // Не сбрасываем при кратковременной потере QR из кадра.
+        let waitingForClear = false; // После сохранения ждём, пока QR места исчезнет.
+        let clearSince = null;       // Когда камера впервые перестала видеть QR.
+        let qrCandidate = null;      // Проверяем, что новый QR читается устойчиво.
+        let candidateSince = 0;
+        let packStep = 'box';  // box -> item -> slot
         let currentBox = null;
         let pendingItem = null;
-        let lastFoundItem = null;
+        let packingFinished = false;
 
-        function selectedOperation() {
-            return document.querySelector('input[name="operation"]:checked')?.value || 'receipt';
-        }
-
-        function updateOperationUi() {
-            const receipt = selectedOperation() === 'receipt';
-            operationHelp.textContent = receipt
-                ? 'Количество должно увеличиться. Склад-получатель пока не указан.'
-                : 'Количество должно уменьшиться. Склад-источник пока не указан.';
-            operationPanel.classList.toggle('writeoff', !receipt);
-            if (lastFoundItem && document.getElementById('item-info').style.display !== 'none') {
-                renderFoundItem(lastFoundItem);
-            }
-        }
-
-        function renderFoundItem(item) {
-            lastFoundItem = item;
-            const receipt = selectedOperation() === 'receipt';
-            const badge = document.getElementById('operation-result');
-            badge.textContent = receipt ? 'Приёмка · плюс' : 'Списание · минус';
-            badge.className = `operation-badge ${receipt ? 'receipt' : 'writeoff'}`;
-            document.getElementById('item-row-location').textContent =
-                `Строка Excel: ${item._meta?.excel_row ?? '—'} · Позиция в списке: ${item._meta?.item_number ?? '—'} · ID: ${item.id ?? '—'}`;
-            const details = document.getElementById('item-details');
-            details.replaceChildren();
-            Object.entries(item).filter(([key]) => key !== '_meta').forEach(([key, value]) => {
-                const term = document.createElement('dt');
-                const description = document.createElement('dd');
-                term.textContent = key;
-                description.textContent = value === '' || value == null ? '—' : String(value);
-                details.append(term, description);
-            });
-            document.getElementById('stock-direction').textContent = receipt
-                ? 'Товар найден в базе. Ожидаемое движение: прибавить к остатку; место назначения ещё не определено.'
-                : 'Товар найден в базе. Ожидаемое движение: вычесть из остатка; место списания ещё не определено.';
-        }
-
-        const savedOperation = localStorage.getItem(OPERATION_STORAGE_KEY);
-        const savedOperationInput = operationInputs.find(input => input.value === savedOperation);
-        if (savedOperationInput) savedOperationInput.checked = true;
-        operationInputs.forEach(input => input.addEventListener('change', () => {
-            localStorage.setItem(OPERATION_STORAGE_KEY, selectedOperation());
-            updateOperationUi();
-        }));
-        updateOperationUi();
-
-        // Запрашиваем доступ к камере
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        // Оставляем запуск камеры из исходного scan.html.
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
             .then(stream => {
                 video.srcObject = stream;
-                video.setAttribute("playsinline", true);
+                video.setAttribute('playsinline', true);
                 video.play();
-                if (!scanRequestId) {
-                    requestAnimationFrame(tick);
-                }
+                if (!scanRequestId) scanRequestId = requestAnimationFrame(tick);
             })
             .catch(err => {
-                console.error("Ошибка доступа к камере:", err);
-                document.getElementById('result').innerHTML = '<p class="error">Нет доступа к камере. Пожалуйста, разрешите доступ и перезагрузите страницу.</p>';
+                console.error('Ошибка доступа к камере:', err);
+                document.getElementById('result').innerHTML =
+                    '<p class="error">Нет доступа к камере. Разрешите доступ.</p>';
             });
 
         function tick() {
-            if (isScanning && video.readyState === video.HAVE_ENOUGH_DATA) {
+            // Пока запрос к серверу выполняется, новые QR не обрабатываем.
+            // Но после сохранения проверяем, освободилась ли камера от QR места.
+            if (!packingFinished && (isScanning || waitingForClear) &&
+                video.readyState === video.HAVE_ENOUGH_DATA) {
                 canvasElement.height = video.videoHeight;
                 canvasElement.width = video.videoWidth;
                 canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
 
                 const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
                 const qr = jsQR(imageData.data, imageData.width, imageData.height);
-                if (qr && modeToggle.checked) {
-                    handlePackingScan(qr.data);
-                } else if (qr) {
-                    handleFindScan(qr.data);
+                const now = Date.now();
+
+                if (waitingForClear) {
+                    // После сохранения места ждём 1 секунду БЕЗ QR в кадре.
+                    if (qr) {
+                        clearSince = null;
+                    } else if (clearSince === null) {
+                        clearSince = now;
+                    } else if (now - clearSince >= 300) {
+                        waitingForClear = false;
+                        isScanning = true;
+                        qrCandidate = null;
+                        setHint('Отсканируйте предмет');
+                    }
+                } else if (isScanning) {
+                    if (!qr) {
+                        qrCandidate = null;
+                    } else {
+                        // Игнорируем случайное распознавание на одном кадре.
+                        if (qr.data !== qrCandidate) {
+                            qrCandidate = qr.data;
+                            candidateSince = now;
+                        }
+                        if (now - candidateSince >= 40 && qr.data !== lastScannedQr) {
+                            lastScannedQr = qr.data;
+                            qrCandidate = null;
+                            handlePackingScan(qr.data);
+                        }
+                    }
                 }
             }
-
             scanRequestId = requestAnimationFrame(tick);
         }
 
@@ -258,47 +224,16 @@
             currentBox = null;
             pendingItem = null;
             currentItemId = null;
+            lastScannedQr = null; // Можно сканировать тот же ящик после сброса.
+            waitingForClear = false;
+            clearSince = null;
+            qrCandidate = null;
             setHint('Отсканируйте ящик');
-        }
-
-        function handleFindScan(scannedId) {
-            // Игнорируем повторное сканирование того же ID
-            if (currentItemId === scannedId) return;
-            currentItemId = scannedId;
-
-            if (isScanning) {
-                isScanning = false;
-            }
-
-            fetch(`/api/get_item/${scannedId}`, { method: 'GET' })
-                .then(response => response.json())
-                // .then(response => {
-                //     if (!response.ok) {
-                //         return response.json().then(err => {throw err;})
-                //     }
-                //     })
-                .then(item => {
-                    if (item.error) {
-                        throw new Error(item.error);
-                    }
-                    renderFoundItem(item);
-
-                    document.querySelector('#item-info').style.display = 'block';
-                    document.querySelector('#result').innerHTML = '<p class="success">✅ QR-код распознан!</p>';
-                    setHint('Наведите камеру на QR-код...');
-                    
-                })
-                .catch(() => {
-                    currentItemId = null;
-                    document.querySelector('#item-info').style.display = 'none';
-                    document.querySelector('#result').innerHTML = '<p class="error">❌ Предмет не найден.</p>';
-                    isScanning = true;
-                });
         }
 
         function handlePackingScan(scannedId) {
             if (packingFinished) return;
-            // Игнорируем повторное сканирование того же ID
+            // Последний QR не читаем заново, пока не появился другой код.
             if (currentItemId === scannedId) return;
             currentItemId = scannedId;
 
@@ -316,7 +251,8 @@
             }
 
             if (packStep === 'item') {
-                fetch(`/api/get_item/${scannedId}`, { method: 'GET' })
+                isScanning = false; // Пока ждём сервер, новые коды не принимаем.
+                fetch(`/api/get_item/${encodeURIComponent(scannedId)}`, { method: 'GET' })
                     .then(response => response.json())
                     .then(item => {
                         if (item.error) {
@@ -332,8 +268,8 @@
                     .catch(() => {
                         document.querySelector('#result').style.display = 'block';
                         document.querySelector('#result').innerHTML = '<p class="error">❌ Предмет не найден.</p>';
-                        isScanning = true;
-                    });
+                    })
+                    .finally(() => { if (!packingFinished) isScanning = true; });
                 
                 return;
             }
@@ -345,18 +281,31 @@
                     return;  // не запоминаем ID и не меняем состояние
                 }
                 document.querySelector('#result').style.display = 'none';
+                isScanning = false; // Не читаем старый QR места, пока сохраняется запись.
 
                 const location = `${currentBox}-${scannedId}`;
+                // Поля Excel могут быть на русском или английском, API остаётся прежним.
                 const data = {
                     id: pendingItem.id,
-                    product: pendingItem.product,
+                    product: pendingItem.product ?? pendingItem['Наименование'] ?? pendingItem['Изделие'] ?? '',
                     placement_location: location,
-                    current_count: pendingItem.current_count,
-                    available_count: pendingItem.available_count,
-                    image: pendingItem.image,
-                    document: pendingItem.document,
-                    analogue: pendingItem.analogue
+                    current_count: pendingItem.current_count ?? pendingItem['Текущее кол-во'] ?? 0,
+                    available_count: pendingItem.available_count ?? pendingItem['Доступное кол-во'] ?? 0,
+                    image: pendingItem.image ?? pendingItem['Изображение'] ?? '',
+                    document: pendingItem.document ?? pendingItem['Вложенный документ'] ?? '',
+                    analogue: pendingItem.analogue ?? pendingItem['Аналог/заменитель'] ?? ''
                 };
+
+                if (!String(data.product).trim()) {
+                    document.getElementById('result').style.display = '';
+                    document.getElementById('result').textContent =
+                        '❌ В Excel не найдена колонка с названием предмета.';
+                    pendingItem = null;
+                    packStep = 'item';
+                    setHint('Отсканируйте предмет');
+                    isScanning = true;
+                    return;
+                }
 
                 fetch(`/api/add_to_list`, {
                     method: 'POST',
@@ -367,96 +316,42 @@
                 .then(result => {
                     if (result.status === 'success') {
                         appendRow(result.item);
-                        // currentItemId = null;
+                        // Не ищем следующий предмет, пока код места перед камерой.
                         pendingItem = null;
                         packStep = 'item';
-                        setHint('Отсканируйте предмет');
+                        waitingForClear = true;
+                        clearSince = null;
+                        // setHint('Уберите QR-код места из камеры');
                         return;
                     }
-                    document.getElementById('result').innerHTML =
-                        '<p class="error">❌ Ошибка сохранения укладочного листа.</p>';
+                    document.getElementById('result').style.display = '';
+                    document.getElementById('result').textContent =
+                        '❌ ' + (result.error || 'Ошибка сохранения укладочного листа.');
+                })
+                .catch(() => {
+                    document.getElementById('result').style.display = '';
+                    document.getElementById('result').textContent =
+                        '❌ Ошибка соединения при сохранении укладочного листа.';
+                })
+                .finally(() => {
+                    // При успешном сохранении tick() сам включит сканирование
+                    // после секунды без QR. При ошибке даём сканировать снова.
+                    if (!packingFinished && !waitingForClear) isScanning = true;
                 });
             }
         }
 
-        const packingUi = document.getElementById('packing-ui');
         const finishPackingBtn = document.getElementById('finishPackingBtn');
         const continuePackingBtn = document.getElementById('continuePackingBtn');
         const restartPackingBtn = document.getElementById('restartPackingBtn');
         const printPackingBtn = document.getElementById('printPackingBtn');
-        const packingFinishedBox = document.getElementById('packing-finished');
         const packingControls = document.getElementById('packing-controls');
-
-        let packingFinished = false;
-
-        function updateModeUi() {
-            if (modeToggle.checked) {
-                packingUi.style.display = '';
-                operationPanel.style.display = 'none';
-                resetPackingState();
-            } else {
-                packingUi.style.display = 'none';
-                operationPanel.style.display = '';
-                setHint('Наведите камеру на QR-код...');
-            }
-            updatePackingActions();
-        }
+        const packingFinishedBox = document.getElementById('packing-finished');
 
         function updatePackingActions() {
-            if (!modeToggle.checked) {
-                packingControls.style.display = 'none';
-                packingFinishedBox.style.display = 'none';
-                return;
-            }
-            if (packingFinished) {
-                packingControls.style.display = 'none';
-                packingFinishedBox.style.display = '';
-            } else {
-                packingControls.style.display = '';
-                packingFinishedBox.style.display = 'none';
-            }
+            packingControls.style.display = packingFinished ? 'none' : '';
+            packingFinishedBox.style.display = packingFinished ? '' : 'none';
         }
-
-        function loadModeFromStorage() {
-            const saved = localStorage.getItem(MODE_STORAGE_KEY);
-            if (saved !== null) {
-                modeToggle.checked = saved === 'true';
-            }
-        }
-
-        document.getElementById('startScanBtn').addEventListener('click', function() {
-            if (isScanning) return; 
-            // Сбрасываем текущий ID, чтобы можно было сканировать снова
-            currentItemId = null;
-            document.querySelector('#item-info').style.display = 'none';
-            document.getElementById('result').innerHTML = '<p>Наведите камеру на QR-код</p>';
-            isScanning = true;
-
-            if (modeToggle.checked) {
-                resetPackingState();
-            } else {
-                setHint('Наведите камеру на QR-код...');
-            }
-        });
-
-        modeToggle.addEventListener('change', () => {
-            localStorage.setItem(MODE_STORAGE_KEY, modeToggle.checked ? 'true' : 'false');
-            updateModeUi();
-            document.querySelector('#item-info').style.display = 'none';
-            document.getElementById('result').innerHTML = '<p>Наведите камеру на QR-код</p>';
-            isScanning = true;
-            currentItemId = null;
-            document.querySelector('#item-info').style.display = 'none';
-
-            if (modeToggle.checked) {
-                resetPackingState();
-            } else {
-                setHint('Наведите камеру на QR-код...');
-            }
-        });
-
-        loadModeFromStorage();
-        updateModeUi();
 
         finishPackingBtn.addEventListener('click', () => {
             packingFinished = true;
@@ -478,19 +373,26 @@
         });
 
         restartPackingBtn.addEventListener('click', () => {
-            fetch('/api/packing/reset', {method: 'POST'})
-            .then(() => {
-                itemsTableBody.innerHTML = '';
-                packingFinished = false;
-                resetPackingState();
-                isScanning = true;
-                updatePackingActions();
-            });
+            fetch('/api/packing/reset', { method: 'POST' })
+                .then(() => {
+                    itemsTableBody.innerHTML = '';
+                    packingFinished = false;
+                    resetPackingState();
+                    isScanning = true;
+                    document.getElementById('result').style.display = 'none';
+                    updatePackingActions();
+                });
         });
 
         printPackingBtn.addEventListener('click', () => {
             window.open('/packing/print', '_blank');
-        })
+        });
+
+        // Освобождаем камеру при уходе со страницы.
+        window.addEventListener('pagehide', () => {
+            if (scanRequestId) cancelAnimationFrame(scanRequestId);
+            if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
+        });
     </script>
 </body>
 </html>

@@ -96,15 +96,42 @@ def render(template, item, background):
                 face = font(size)
                 lines = []
                 for paragraph in text.split('\n'):
-                    line = ''
-                    for char in paragraph:
-                        if line and draw.textlength(line + char, font=face) > w:
-                            lines.append(line)
-                            line = ''
-                        line += char
-                    lines.append(line)
+                    # line = ''
+                    # for char in paragraph:
+                    #     if line and draw.textlength(line + char, font=face) > w:
+                    #         lines.append(line)
+                    #         line = ''
+                    #     line += char
+                    # Переносим по словам, а не по каждой букве.
+                    # Если слово длиннее всей строки, тогда делим на части.
+                    current = ''
+                    for word in paragraph.split():
+                        test = word if not current else current + ' ' + word
+                        if draw.textlength(test, font=face) <= w:
+                            current = test
+                            continue
+                        if current:
+                            lines.append(current)
+                            current = ''
+                        if draw.textlength(word, font=face) <= w:
+                            current = word
+                        else:
+                            for char in word:
+                                if current and draw.textlength(current + char, font=face) > w:
+                                    lines.append(current)
+                                    current = ''
+                                current += char
+                    lines.append(current)
                 spacing = size + 3
-                if len(lines) * spacing <= h:
+                # if len(lines) * spacing <= h:
+                #     break
+                # Если слово помещается при чуть меньшем шрифте,
+                # уменьшаем шрифт вместо того, чтобы делить слово на буквы.
+                words_fit = all(
+                    draw.textlength(word, font=face) <= w
+                    for paragraph in text.split('\n') for word in paragraph.split()
+                )
+                if len(lines) * spacing <= h and (words_fit or size == 10):
                     break
             if len(lines) * spacing > h or any(draw.textlength(line, font=face) > w for line in lines):
                 raise ValueError('Текст не помещается: увеличьте блок или сократите содержимое')
