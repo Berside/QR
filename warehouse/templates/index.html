@@ -10,6 +10,26 @@
     <style>
         /* Подсветка строки найденного предмета */
         #itemsTableBody tr.scanned-row > td { background-color: #bbf7d0 !important; }
+        /* Компактная подсказка всегда видна над таблицей при прокрутке */
+        .scan-status {
+            position: sticky;
+            top: 8px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            background: #edf6ff;
+            border: 1px solid #b9d8f5;
+            border-radius: 8px;
+        }
+        .scan-status #result { flex: 1; min-width: 190px; }
+        .scan-status #result p { margin: 0; }
+
+        /* Камера работает, но изображение не занимает место на странице */
+        #video { position: absolute; left: -9999px; width: 320px; height: 240px; }
     </style>
 </head>
 <body>
@@ -19,12 +39,12 @@
         <div class="qr-buttons">
             <a href="/label-editor"><svg class="icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg>Редактор</a>
             <button id="allQrBtn"><svg class="icon" viewBox="0 0 24 24"><path d="M5 3h5v5H5zM14 3h5v5h-5zM5 16h5v5H5zM15 15h2v2h-2zM18 18h2v2h-2z"/></svg>Все QR</button>
-            <button id="scan" class="primary"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 8h8v8H8z"/></svg>Сканировать</button>
+            <button id="scan" class="primary"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 8h8v8H8z"/></svg><span id="scanButtonText">Сканировать</span></button>
         </div>
         </div>
 
         <!-- Сканер перенесён из scan.html (показывается кнопкой «Сканировать») -->
-        <section id="scanPanel" class="scanner-card card" style="display: none;">
+        <!-- <section id="scanPanel" class="scanner-card card" style="display: none;">
             <div class="scanner-view">
                 <button id="startScanBtn"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 8h8v8H8z"/></svg>Начать сканирование</button>
                 <div class="scanner-box">
@@ -36,21 +56,33 @@
                 <div class="scan-help"><strong>Как сканировать</strong><br>Расположите QR-код внутри голубой рамки и держите камеру неподвижно.</div>
                 <div id="result"><p>Наведите камеру на QR-код...</p></div>
             </aside>
+        </section> -->
+        <section id="scanPanel" class="scan-status" style="display: none;" aria-live="polite">
+            <strong>QR-сканер</strong>
+            <div id="result"><p>Наведите камеру на QR-код...</p></div>
+            <!-- Как в scan.html: после успешного сканирования включаем следующее кнопкой -->
+            <button type="button" id="startScanBtn" style="display: none;">Сканировать ещё</button>
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="canvas" style="display: none;"></canvas>
         </section>
 
         <div class="add-item-form">
             <div class="section-heading"><div class="section-title"><span class="section-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><div><h2>Добавить новый предмет</h2><p>Заполните доступные поля загруженной таблицы.</p></div></div></div>
             {% if columns %}
             <div class="form-grid">
-            {% for column in columns if column not in ['id', 'image', 'document'] %}
+            
+            {% for column in columns if column|lower not in ['id', 'image', 'изображение', 'document'] %}
             <label>{{ column }}
                 <input type="text" class="form-input item-column" data-column="{{ column }}" placeholder="{{ column }}">
             </label>
             {% endfor %}
+            <!-- Поле загрузки есть только если Excel содержит колонку изображения -->
+            {% if 'image' in columns or 'Изображение' in columns %}
             <div class="file-control">
                 <input type="file" id="itemImage" accept=".png,.jpg,.jpeg">
                 <div class="image-upload__hint"><svg class="icon" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>Выбрать изображение</div>
             </div>
+            {% endif %}
             </div>
 
             <!-- <div class="document-upload">
@@ -94,8 +126,9 @@
                         {% for item in items %}
                         <tr data-id="{{ item.get('id', '') }}">
                             {% for column in columns %}
-                            <td data-column="{{ column }}" {% if column == 'image' %}class="image-cell"{% endif %}>
-                                {% if column == 'image' and item.get(column) %}
+                            <!-- <td data-column="{{ column }}" {% if column == 'image' %}class="image-cell"{% endif %}> -->
+                            <td data-column="{{ column }}" {% if column|lower in ['image', 'изображение'] %}class="image-cell"{% endif %}>
+                                {% if column|lower in ['image', 'изображение'] and item.get(column) %}
                                     <span class="image-name">Картинка</span>
                                     <div class="image-preview"><img src="{{ item.get(column) }}" alt="Предпросмотр"></div>
                                 {% else %}{{ item.get(column, '') }}{% endif %}
@@ -310,9 +343,27 @@
                 window.location.href = `/print_labels`;
             })
 
+            // document.querySelector('#scan').addEventListener('click', function(){
+            //     document.getElementById('scanPanel').style.display = '';
+            //     startCamera(); // Вместо перехода /scan включаем камеру здесь
+            // })
             document.querySelector('#scan').addEventListener('click', function(){
-                document.getElementById('scanPanel').style.display = '';
-                startCamera(); // Вместо перехода /scan включаем камеру здесь
+                const panel = document.getElementById('scanPanel');
+
+                // Повторное нажатие выключает камеру и убирает подсказку
+                if (panel.style.display !== 'none') {
+                    stopCamera();
+                    return;
+                }
+
+                // Показываем компактную подсказку, а саму камеру не показываем
+                panel.style.display = 'flex';
+                document.getElementById('scanButtonText').textContent = 'Остановить';
+                document.getElementById('result').innerHTML = '<p>Наведите камеру на QR-код...</p>';
+                document.getElementById('startScanBtn').style.display = 'none';
+                currentItemId = null;
+                isScanning = true;
+                startCamera(); // Прежнее сканирование из scan.html
             })
         });
 
@@ -361,7 +412,8 @@
                 fields.replaceChildren();
                 row.querySelectorAll('[data-column]').forEach(cell => {
                     const column = cell.dataset.column;
-                    if (['id', 'image', 'document'].includes(column)) return;
+                    // if (['id', 'image', 'document'].includes(column)) return;
+                    if (['id', 'image', 'Изображение', 'document'].includes(column)) return;
                     const label = document.createElement('label');
                     label.textContent = column;
                     const input = document.createElement('input');
@@ -478,6 +530,11 @@
 
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
                 .then(stream => {
+                    // Если сканирование уже закрыли, камеру не включаем
+                    if (document.getElementById('scanPanel').style.display === 'none') {
+                        stream.getTracks().forEach(track => track.stop());
+                        return;
+                    }
                     cameraStream = stream;
                     video.srcObject = stream;
                     video.setAttribute("playsinline", true);
@@ -491,6 +548,19 @@
                     document.getElementById('result').innerHTML =
                         '<p class="error">Нет доступа к камере. Пожалуйста, разрешите доступ.</p>';
                 });
+        }
+        
+        // Выключаем камеру и скрываем подсказку при повторном нажатии.
+        function stopCamera() {
+            if (scanRequestId) cancelAnimationFrame(scanRequestId);
+            scanRequestId = null;
+            if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+            video.srcObject = null;
+            document.getElementById('scanPanel').style.display = 'none';
+            document.getElementById('scanButtonText').textContent = 'Сканировать';
+            currentItemId = null;
+            isScanning = false;
         }
 
         function tick() {
@@ -537,6 +607,8 @@
 
                     document.querySelector('#result').innerHTML =
                         '<p class="success">✅ QR-код распознан! Предмет ' + item.id + '</p>';
+                    // Оставляем исходную паузу после сканирования
+                    document.getElementById('startScanBtn').style.display = '';
                 })
                 .catch(() => {
                     currentItemId = null;
@@ -552,6 +624,7 @@
             // Сбрасываем текущий ID, чтобы можно было сканировать снова
             currentItemId = null;
             document.getElementById('result').innerHTML = '<p>Наведите камеру на QR-код</p>';
+            this.style.display = 'none'; // Прячем до следующего успешного сканирования
             isScanning = true;
         });
 
