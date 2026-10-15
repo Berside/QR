@@ -6,6 +6,11 @@
     <title>Управление</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}">
+    <script src="{{ url_for('static', filename='jsQR.js') }}"></script>
+    <style>
+        /* Подсветка строки найденного предмета */
+        #itemsTableBody tr.scanned-row > td { background-color: #bbf7d0 !important; }
+    </style>
 </head>
 <body>
     <main class="container app-main">
@@ -17,6 +22,22 @@
             <button id="scan" class="primary"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 8h8v8H8z"/></svg>Сканировать</button>
         </div>
         </div>
+
+        <!-- Сканер перенесён из scan.html (показывается кнопкой «Сканировать») -->
+        <section id="scanPanel" class="scanner-card card" style="display: none;">
+            <div class="scanner-view">
+                <button id="startScanBtn"><svg class="icon" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M8 8h8v8H8z"/></svg>Начать сканирование</button>
+                <div class="scanner-box">
+                    <video id="video" autoplay playsinline></video>
+                    <canvas id="canvas" style="display: none;"></canvas>
+                </div>
+            </div>
+            <aside class="scan-side">
+                <div class="scan-help"><strong>Как сканировать</strong><br>Расположите QR-код внутри голубой рамки и держите камеру неподвижно.</div>
+                <div id="result"><p>Наведите камеру на QR-код...</p></div>
+            </aside>
+        </section>
+
         <div class="add-item-form">
             <div class="section-heading"><div class="section-title"><span class="section-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><div><h2>Добавить новый предмет</h2><p>Заполните доступные поля загруженной таблицы.</p></div></div></div>
             {% if columns %}
@@ -290,7 +311,8 @@
             })
 
             document.querySelector('#scan').addEventListener('click', function(){
-                window.location.href = `/scan`;
+                document.getElementById('scanPanel').style.display = '';
+                startCamera(); // Вместо перехода /scan включаем камеру здесь
             })
         });
 
@@ -439,6 +461,105 @@
         // window.addEventListener('load', function() {
         //     // Можно проверить localStorage если нужно сохранять состояние
         // });
+
+        // ===== Сканирование: из scan.html =====
+        const video = document.getElementById('video');
+        const canvasElement = document.getElementById('canvas');
+        const canvas = canvasElement.getContext('2d');
+        let isScanning = true;
+        let scanRequestId = null;
+        let currentItemId = null;
+        let cameraStream = null;
+
+        // Раньше камера запускалась сразу при открытии scan.html.
+        // Теперь вызываем этот же код после нажатия кнопки на главной.
+        function startCamera() {
+            if (cameraStream) return; // Повторно камеру не открываем
+
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+                .then(stream => {
+                    cameraStream = stream;
+                    video.srcObject = stream;
+                    video.setAttribute("playsinline", true);
+                    video.play();
+                    if (!scanRequestId) {
+                        scanRequestId = requestAnimationFrame(tick);
+                    }
+                })
+                .catch(err => {
+                    console.error("Ошибка доступа к камере:", err);
+                    document.getElementById('result').innerHTML =
+                        '<p class="error">Нет доступа к камере. Пожалуйста, разрешите доступ.</p>';
+                });
+        }
+
+        function tick() {
+            if (isScanning && video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvasElement.height = video.videoHeight;
+                canvasElement.width = video.videoWidth;
+                canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+
+                const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+                const qr = jsQR(imageData.data, imageData.width, imageData.height);
+                if (qr) {
+                    handleFindScan(qr.data);
+                }
+            }
+
+            scanRequestId = requestAnimationFrame(tick);
+        }
+
+        function handleFindScan(scannedId) {
+            // Игнорируем повторное сканирование того же ID
+            if (currentItemId === scannedId) return;
+            currentItemId = scannedId;
+
+            if (isScanning) {
+                isScanning = false;
+            }
+
+            fetch(`/api/get_item/${scannedId}`, { method: 'GET' })
+                .then(response => response.json())
+                .then(item => {
+                    if (item.error) {
+                        throw new Error(item.error);
+                    }
+
+                    // На главной строка уже содержит data-id с ID предмета.
+                    const row = [...document.querySelectorAll('#itemsTableBody tr[data-id]')]
+                        .find(tr => tr.dataset.id === String(item.id));
+                    if (!row) throw new Error('Строка не найдена в таблице');
+
+                    // Убираем старую подсветку, отмечаем найденную строку.
+                    document.querySelector('.scanned-row')?.classList.remove('scanned-row');
+                    row.classList.add('scanned-row');
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                    document.querySelector('#result').innerHTML =
+                        '<p class="success">✅ QR-код распознан! Предмет ' + item.id + '</p>';
+                })
+                .catch(() => {
+                    currentItemId = null;
+                    document.querySelector('#result').innerHTML =
+                        '<p class="error">❌ Предмет не найден.</p>';
+                    isScanning = true;
+                });
+        }
+
+        // Как и в scan.html: кнопка разрешает сканировать следующий предмет.
+        document.getElementById('startScanBtn').addEventListener('click', function() {
+            if (isScanning) return;
+            // Сбрасываем текущий ID, чтобы можно было сканировать снова
+            currentItemId = null;
+            document.getElementById('result').innerHTML = '<p>Наведите камеру на QR-код</p>';
+            isScanning = true;
+        });
+
+        // Освобождаем камеру, когда пользователь уходит с главной страницы.
+        window.addEventListener('pagehide', function() {
+            if (scanRequestId) cancelAnimationFrame(scanRequestId);
+            if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+        });
     </script>
 </body>
 </html>
