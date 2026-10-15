@@ -43,8 +43,9 @@ def add_item():
     new_item = {column: data.get(column, '') for column in columns}
     if 'id' in columns:
         new_item['id'] = new_id
-    if 'image' in columns:
-        new_item['image'] = image_url
+    image_column = next((c for c in columns if c.lower() in ('image', 'изображение')), None)
+    if image_column:
+        new_item[image_column] = image_url
     items.append(new_item)
     try:
         save_items(items)

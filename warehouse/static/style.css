@@ -259,10 +259,6 @@ input:checked + .slider:before {
     color: white;
 }
     
-.editBtn:hover {
-    background-color: #0056b3;
-}
-    
 .deleteBtn {
     background-color: #dc3545;
     color: white;
@@ -350,9 +346,9 @@ input:checked + .slider:before {
     color: white;
 }
     
-.cancel-btn:hover {
+/* .cancel-btn:hover {
     background-color: #5a6268;
-}
+} */
 
 .excel-empty-state {
     padding: 12px 14px;

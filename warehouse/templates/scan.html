@@ -299,7 +299,6 @@
         function handlePackingScan(scannedId) {
             if (packingFinished) return;
             // Игнорируем повторное сканирование того же ID
-            console.log("NNN", currentItemId, scannedId)
             if (currentItemId === scannedId) return;
             currentItemId = scannedId;
 
